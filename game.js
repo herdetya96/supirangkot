@@ -338,7 +338,50 @@ G.SELF_MODES = {
   ngetem: { name: 'Ngetem', g: 0.85, st: -11, w: 0.6, f: 0.55, desc: 'Tunggu sampai penuh. Irit tenaga dan bensin, hasilnya untung-untungan.' },
   istirahat: { name: 'Istirahat', g: 0, st: 35, w: 0, f: 0, desc: 'Tenaga +35. Tidak ada pemasukan.' }
 };
-G.runShift = function (s, sh, selfMode) {
+/* ---------- nyetir sendiri (mini-game) ----------
+   Mesin hanya menyiapkan isi jalan (spec) dan mengubah hasilnya jadi uang. Fisika dan gambar ada di drive.js. */
+G.DRIVE = { dur: 60, par: 13.5, spawn: 24, seats: 12, place: 14000, vMax: 340 };
+G.driveSpec = function (s, sh) {
+  const a = s.fleet.find(x => x.driver === 'self' && !x.off); if (!a) return null;
+  const Rt = G.ROUTES[a.route], P = s.today.per[a.id], D = G.DRIVE;
+  const dm = G.demand(s, a.route, sh);
+  const fare = Rt.base[sh] * condF(a) * upF(a) * P.mult[sh] * (s.flags.kernet ? 1.08 : 1) / D.par;
+  const n = Math.max(6, Math.round(D.spawn * dm));
+  const groups = []; let left = n;
+  while (left > 0) { const k = Math.min(left, 1 + Math.floor(rng(s) * 3)); left -= k; groups.push({ d: 500 + rng(s) * (D.place - 500), n: k }); }
+  groups.sort((x, y) => x.d - y.d);
+  const traffic = [], nm = sh === 1 ? 14 : 22;
+  for (let i = 0; i < nm; i++) traffic.push({ d: 300 + rng(s) * D.place * 0.9, lane: rng(s) < 0.2 ? 0 : rng(s) < 0.55 ? 1 : 2, v: 140 + rng(s) * 120 });
+  const biru = [], nb = hasMod(s, 'biru') ? 7 : s.bab >= 2 ? 4 : 2;
+  for (let i = 0; i < nb; i++) biru.push({ d: 400 + rng(s) * D.place * 0.8, v: 150 + rng(s) * 60 });
+  const wet = s.wx.today === 'hujan', potholes = [];
+  for (let i = 0, np = wet ? 18 : 10; i < np; i++) potholes.push({ d: 600 + rng(s) * D.place, x: 84 + rng(s) * 192 });
+  const steal = hasMod(s, 'biru') ? 2 : 1;
+  const police = rng(s) < 0.6 ? [{ d: 2500 + rng(s) * 7000 }] : [];
+  const mogokAt = a.cond < 40 && rng(s) < (40 - a.cond) * 0.015 ? 15 + rng(s) * 35 : null;
+  const ends = Rt.name.split(' – ');
+  return { dur: D.dur, seats: D.seats, vMax: D.vMax, fare, groups, traffic, biru, steal, potholes, police, mogokAt, wet, sh,
+    wobble: s.stamina < 25 ? (25 - s.stamina) / 25 : 0, route: a.route, from: ends[0], to: ends[ends.length - 1],
+    name: a.name, color: a.color, seed: Math.floor(rng(s) * 2147483647), tarif: Math.round(fare) };
+};
+function driveShift(s, a, sh, D, res, mandor) {
+  const Rt = G.ROUTES[a.route], P = s.today.per[a.id];
+  s.stamina = clamp(s.stamina - 20 - (D.avgV > 0.85 ? 6 : 0), 0, 100);
+  const frac = Math.min(1, D.t / G.DRIVE.dur);
+  const gross = R10(Math.max(0, D.fares)), fuel = R10(fuelOf(s, a) * (0.6 + 0.5 * D.avgV) * frac);
+  cond(a, -1.1 * Rt.wear * (0.6 + 0.6 * D.avgV) * mandor - 3 * D.hits - 1 * D.potholes);
+  const n = [`${D.riders} penumpang.`];
+  if (D.mogok) { cond(a, 8); cash(s, -150, 'Perbaikan'); res.down = true; n.push(`${a.name} mogok, derek Rp 150 rb.`); }
+  if (D.severe) { cash(s, -50 * D.severe, 'Perbaikan'); rep(s, -D.severe); n.push(`Nabrak ${D.severe}×, ganti rugi ${G.fmt(50 * D.severe)}.`); }
+  else if (D.hits) n.push(`Nyerempet ${D.hits}×.`);
+  if (D.tilang) { cash(s, -75 * D.tilang, 'Surat & denda'); n.push(`Ditilang ${G.fmt(75 * D.tilang)}.`); }
+  if (D.missed) { rep(s, -0.4 * D.missed); n.push(`${D.missed} penumpang kelewatan turun.`); }
+  if (D.stolen) n.push(`${D.stolen} diserobot angkot biru.`);
+  res.gross = gross; res.fuel = fuel; res.note = n.join(' '); res.drive = D;
+  P.gross += gross; P.fuel += fuel;
+  cash(s, gross, 'Narik sendiri'); cash(s, -fuel, 'Bensin'); s.today.narik += gross - fuel;
+}
+G.runShift = function (s, sh, selfMode, drive) {
   const out = { shift: sh, results: [] };
   const mandor = s.drivers.ujang && s.drivers.ujang.hired && s.drivers.ujang.perk ? 0.88 : 1;
   for (const a of s.fleet) {
@@ -346,6 +389,7 @@ G.runShift = function (s, sh, selfMode) {
     if (!a.driver || a.off) { out.results.push({ id: a.id, idle: true }); continue; }
     const Rt = G.ROUTES[a.route]; const res = { id: a.id, gross: 0, fuel: 0, note: '' };
     let g = 1, w = 1, f = 1, risk = 0, sk = 1, vary = 0; const self = a.driver === 'self';
+    if (self && selfMode === 'setir' && drive) { res.mode = 'setir'; driveShift(s, a, sh, drive, res, mandor); out.results.push(res); continue; }
     if (self) {
       let mode = selfMode || 'normal';
       if (mode === 'ngebut' && s.stamina < 20) mode = 'normal';

@@ -2,8 +2,8 @@
 (function () {
 'use strict';
 const G = window.NARIK, app = document.getElementById('app'), KEY = 'narik-save-v1';
-app.innerHTML = '<div id="v"></div><div id="roti" class="roti" hidden role="status"></div>';
-const V = document.getElementById('v'), roti = document.getElementById('roti');
+app.innerHTML = '<div id="v"></div><div id="ny"></div><div id="roti" class="roti" hidden role="status"></div>';
+const V = document.getElementById('v'), roti = document.getElementById('roti'), NY = document.getElementById('ny');
 const fmt = G.fmt;
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const TINT = { hijau: 'none', biru: 'hue-rotate(62deg) saturate(1.1) brightness(1.12)', kuning: 'hue-rotate(-76deg) saturate(1.6) brightness(1.3)', merah: 'hue-rotate(-128deg) saturate(1.35)', ungu: 'hue-rotate(148deg) saturate(.95)' };
@@ -136,19 +136,30 @@ function siang() {
     body = `<div class="kejadian" style="display:flex;flex-direction:column;gap:8px"><span class="eyebrow">Kejadian · ${esc(U.ev.angkot)}</span><h3>${esc(U.ev.title)}</h3><p>${esc(U.evOut)}</p></div><button class="btn plat-b blok" data-act="ev-ok">Lanjut</button>`;
   } else if (U.stage === 'mode') {
     body = `<div class="ramai">${ramaiHTML(sh)}</div>` + (selfA
-      ? `<div class="mode">${Object.entries(G.SELF_MODES).map(([k, m]) => `<button data-act="mode" data-m="${k}" ${k === 'ngebut' && S.stamina < 20 ? 'disabled' : ''}><b>${m.name}</b><small>${m.desc}</small></button>`).join('')}</div>`
+      ? `<button class="gas setir-btn" data-act="setir">Nyetir sendiri<small>Kamu yang pegang setir rit ini${S.stamina < 25 ? ' · ngantuk, setir goyang' : ''}</small></button>
+         <p class="otomatis">Atau narik otomatis</p><div class="mode">${Object.entries(G.SELF_MODES).map(([k, m]) => `<button data-act="mode" data-m="${k}" ${k === 'ngebut' && S.stamina < 20 ? 'disabled' : ''}><b>${m.name}</b><small>${m.desc}</small></button>`).join('')}</div>`
       : `<button class="btn ijo blok" data-act="mode" data-m="normal">Lepas angkot rit ${G.SHIFT[sh].toLowerCase()}</button>`);
+  } else if (U.stage === 'drive') {
+    body = `<p>Kamu di jalan…</p>`;
   } else if (U.stage === 'run') {
     body = `<p>Angkot jalan…</p>`;
   } else if (U.stage === 'result') {
     body = `<ul class="hasil">${U.res.results.map(r => { const a = S.fleet.find(x => x.id === r.id); if (!a) return ''; const dr = G.drv(S, a);
       if (r.idle) return `<li><span class="n">${esc(a.name)}</span><span></span><small>Di garasi.</small></li>`;
-      if (r.rest || r.down) return `<li><span class="n">${esc(a.name)}</span><span></span><small>${esc(r.note)}</small></li>`;
+      if (r.rest || (r.down && !r.drive)) return `<li><span class="n">${esc(a.name)}</span><span></span><small>${esc(r.note)}</small></li>`;
       return `<li><span class="n">${esc(a.name)}</span><span class="v num">+${fmt(r.gross).replace('Rp ', '')}</span><small>${dr ? `Dibawa ${esc(G.DRIVERS[dr.id].name)}. Setoran dihitung malam.` : `Bensin ${fmt(r.fuel)}.`} ${esc(r.note || '')}</small></li>`; }).join('')}</ul>
       <button class="btn plat-b blok" data-act="next-shift">${sh < 2 ? 'Lanjut rit ' + G.SHIFT[sh + 1].toLowerCase() : 'Pulang, hitung uang'}</button>`;
   }
   return hdr() + `<main><div class="peta">${mapSVG()}</div>
     <section class="kartu rit"><div class="rit-h"><h2>Rit ${G.SHIFT[sh].toLowerCase()}</h2><span>${G.JAM[sh]}</span></div><div class="dots">${dots}</div>${body}</section></main>`;
+}
+function drive() {
+  const spec = G.driveSpec(S, U.shift); if (!spec) { runShift('normal'); return; }
+  U.stage = 'drive'; render();
+  window.NARIK_DRIVE.mount(NY, spec, { hex: HEX[spec.color], shiftName: G.SHIFT[U.shift].toLowerCase() }, res => {
+    if (!res) { U.stage = 'mode'; render(); return; }
+    U.res = G.runShift(S, U.shift, 'setir', res); U.stage = 'result'; render();
+  });
 }
 function enterShift(sh) {
   U.shift = sh; U.res = null; const ev = G.rollEvent(S, sh);
@@ -247,7 +258,8 @@ function modalHTML() {
   if (m.m === 'bantuan') {
     return sheet('Cara main', `<div class="kartu papan"><ul>
       <li>Satu hari punya tiga rit: pagi, siang, sore. Tiap pagi kamu atur siapa membawa angkot mana dan di trayek mana.</li>
-      <li>Kalau kamu sendiri yang narik, pilih gaya tiap rit. Ngebut menguras tenaga; tenaga habis berarti kamu harus istirahat.</li>
+      <li>Kalau kamu sendiri yang narik, kamu bisa <b>nyetir sendiri</b>: geser jari untuk setir, tahan REM, menepi untuk menaikkan dan menurunkan penumpang. Nyetir rapi lebih untung daripada narik otomatis.</li>
+      <li>Atau pilih gaya narik otomatis tiap rit. Ngebut menguras tenaga; tenaga habis berarti kamu harus istirahat.</li>
       <li>Kondisi angkot turun tiap rit. Di bawah 40, angkot bisa mogok. Servis di bengkel.</li>
       <li>Sopir membayar setoran tetap dan menanggung bensin. Sisanya dia bawa pulang. Kalau sisanya kurang dari kebutuhannya, dia ngebut, mobil cepat rusak, lalu dia pergi.</li>
       <li>Nama baik menambah penumpang. Naik lewat pilihan yang jujur, turun lewat tunggakan dan sopir ugal-ugalan.</li>
@@ -364,6 +376,7 @@ const ACT = {
   ev(d) { U.evOut = G.resolveEvent(S, +d.i); U.stage = 'evout'; render(); },
   'ev-ok'() { U.stage = 'mode'; render(); },
   mode(d) { runShift(d.m); },
+  setir() { drive(); },
   'next-shift'() { if (U.shift < 2) enterShift(U.shift + 1); else { G.endDay(S); view = 'malam'; U.night = 0; save(); render(); } },
   tutup() {
     playScenes('malam', () => {

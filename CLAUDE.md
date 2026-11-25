@@ -7,6 +7,7 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 
 - `npm run serve` lalu buka `http://localhost:5173`
 - `npm run sim` menjalankan `sim.js` (300 permainan per strategi). Jalankan setiap kali angka ekonomi diubah.
+- `npm run drive` menjalankan `drivebot.js`: dua bot sopir memainkan mini-game nyetir 200 kali. Jalankan setiap kali `drive.js` atau `G.DRIVE` diubah.
 
 ## Arsitektur
 
@@ -14,6 +15,9 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   State `s` adalah JSON polos (kecuali `s.today._choices`, yang dikosongkan sebelum disimpan).
   Acak memakai `rng(s)` berbasis `s.seed`, jadi satu seed = satu jalan cerita yang bisa diulang.
 - `ui.js` = render ulang penuh ke `#v` lewat template string, aksi lewat `data-act`. Tidak boleh berisi aturan main.
+- `drive.js` = mini-game nyetir (`window.NARIK_DRIVE`). `Sim` adalah fisika murni tanpa DOM, `mount` memasang canvas dan kontrol ke `#ny`.
+  Isi jalan (penumpang, motor, angkot biru, lubang, polisi, mogok) dibuat `G.driveSpec` dari seed game, jadi tetap aturan main di `game.js`.
+  Hasilnya dikirim balik ke `G.runShift(s, sh, 'setir', hasil)`, yang mengubahnya jadi uang, bensin, kondisi, denda, dan nama baik.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 
@@ -26,6 +30,25 @@ Skor: petisi 30, paguyuban 25 (nama baik ≥70, separuh di ≥55), armada 30 (an
 Menang di skor 75: mod `trayek_bapak` (05 ×1,1). Kalah: `s.kuota05 = 2`, angkot lebihan dipindah (`kuotaFix`), dan kalau tidak ada izin lain
 pemain dapat izin 09 gratis. Jalan ketiga: terima tawaran Sobari di adegan `b3_tekanan` (jual 2 angkot, kuota 3, tanpa sidang).
 Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik −15.
+
+## Mini-game nyetir
+
+Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
+60 detik. Menepi ke lajur kiri dan berhenti di kotak kuning untuk menaikkan penumpang. Penumpang teriak "Kiri!" setelah
+900–3100 unit; berhenti di pinggir untuk menurunkan. Ongkos dibayar waktu turun; yang kelewatan tidak bayar.
+Tarif per penumpang = pendapatan rit dasar trayek × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (13,5).
+Jumlah penumpang = 24 × permintaan, jadi hari ramai terasa ramai. Angkot biru menyerobot satu rombongan
+(dua di Bab 3). Tenaga −20 per rit (−26 kalau rata-rata laju di atas 85%).
+
+Hasil `drivebot.js` (200 rit), dibanding pendapatan mode "Narik biasa":
+
+| Bot | Ongkos | Naik | Kelewatan | Tilang |
+|---|---|---|---|---|
+| Rapi (berhenti untuk "kiri", hindari lubang, pelan dekat polisi) | 1,13× | 16 | 0,1 | 0 |
+| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,82× | 18 | 6,8 | 0,4 |
+
+Mode "Ngebut" otomatis tetap 1,3×, tapi tenaga −30 dan risiko tilang dan serempet. Bot belum pernah diuji melawan
+tangan manusia di HP; kemungkinan manusia di awal lebih buruk dari bot rapi.
 
 ## Pilar desain
 
@@ -78,7 +101,8 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
 - Simpan lintas perangkat, suara, tutorial bertahap, pencapaian, berbagi tangkapan layar.
 - Pendapatan saat pemain pergi sudah ada (`G.offline`, maks 8 jam, hanya Bab 2) tapi belum diseimbangkan.
 - Peta masih skematis; sprite angkot cuma satu sudut dan warna lain memakai filter CSS.
-- Belum ada tes unit; `sim.js` satu-satunya jaring pengaman.
+- Belum ada tes unit; `sim.js` dan `drivebot.js` satu-satunya jaring pengaman.
+- Mini-game nyetir belum punya suara, getar, atau tutorial bertahap; penjelasannya hanya kartu sebelum rit.
 
 ## Gaya tulisan
 

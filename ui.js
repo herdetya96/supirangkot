@@ -37,6 +37,7 @@ function hdr() {
       <div class="plat"><small>HARI ${S.day}</small><b>${G.DOW[c.dow].toUpperCase()}</b></div>
       <div class="plat grow"><small>UANG</small><b class="num">${fmt(S.money)}</b></div>
       ${due ? `<div class="plat merah"><small>UTANG · ${Math.max(0, due.day - S.day)} HARI</small><b class="num">${fmt(G.debtLeft(S)).replace('Rp ', '')}</b></div>`
+        : G.b3on(S) ? `<div class="plat merah"><small>SIDANG · ${Math.max(0, S.b3.hearing - S.day)} HARI</small><b class="num">${G.sidang(S).total}/${G.B3.win}</b></div>`
         : `<div class="plat"><small>ARMADA</small><b>${S.fleet.length}</b></div>`}
     </div>
     <div class="hud-meta"><span>${wx} · tanggal ${c.dom}</span><span>Nama baik <b>${Math.round(S.rep)}</b></span>
@@ -54,7 +55,7 @@ function angkotCard(a) {
   const p = G.project(S, a), dr = G.drv(S, a);
   let opt = `<option value="">Kosong</option><option value="self" ${a.driver === 'self' ? 'selected' : ''}>Kamu sendiri</option>`;
   for (const d of Object.values(S.drivers)) if (d.hired) { const at = S.fleet.find(b => b.driver === d.id && b !== a); opt += `<option value="${d.id}" ${a.driver === d.id ? 'selected' : ''}>${esc(G.DRIVERS[d.id].name)}${at ? ' (dari ' + esc(at.name) + ')' : ''}</option>`; }
-  let ropt = ''; for (const r of Object.values(G.ROUTES)) if (S.routes[r.id]) ropt += `<option value="${r.id}" ${a.route === r.id ? 'selected' : ''}>${r.id} · ${esc(r.name)}</option>`;
+  let ropt = ''; for (const r of Object.values(G.ROUTES)) if (S.routes[r.id]) { const full = a.route !== r.id && G.kuotaFull(S, r.id, a); ropt += `<option value="${r.id}" ${a.route === r.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${r.id} · ${esc(r.name)}${full ? ' (kuota penuh)' : ''}</option>`; }
   let low = '';
   if (dr) {
     const D = G.DRIVERS[dr.id]; const st = !p.pressured ? ['ok', 'Cukup'] : p.paid < a.setoran ? ['bad', 'Nombok'] : ['warn', 'Mepet, dia bakal ngebut'];
@@ -65,13 +66,17 @@ function angkotCard(a) {
   } else low = `<div class="proy"><span>Tidak jalan hari ini.</span><span class="pill warn">Belum ada sopir</span></div>`;
   return `<article class="kartu angkot">
     <div class="a-top">${img(a)}<div><h3>${esc(a.name)}</h3>${a.stiker ? `<p class="stiker">“${esc(a.stiker)}”</p>` : ''}
-      <div class="a-kondisi">Kondisi ${bar(a.cond, 100, condCls(a.cond))}<b>${Math.round(a.cond)}</b></div>${a.loan ? `<p class="stiker">CICILAN ${fmt(a.loan.daily)}/HARI · ${a.loan.left} HARI LAGI</p>` : ''}</div></div>
+      <div class="a-kondisi">Kondisi ${bar(a.cond, 100, condCls(a.cond))}<b>${Math.round(a.cond)}</b></div>${a.loan ? `<p class="stiker">CICILAN ${fmt(a.loan.daily)}/HARI · ${a.loan.left} HARI LAGI</p>` : ''}${G.b3on(S) ? kirPill(a) : ''}</div></div>
     <div class="a-row">
       <label class="fld">Sopir<select id="drv-${a.id}" data-chg="driver" data-id="${a.id}">${opt}</select></label>
       <label class="fld">Trayek<select id="rt-${a.id}" data-chg="route" data-id="${a.id}">${ropt}</select></label>
     </div>${low}
     <div class="a-foot"><button class="btn sm" data-act="modal" data-m="bengkel" data-id="${a.id}">Bengkel${a.cond < 45 ? ' · perlu servis' : ''}</button></div>
   </article>`;
+}
+function kirPill(a) {
+  if (!a.kir) return `<p><span class="pill warn">Belum uji KIR</span></p>`;
+  return a.cond >= G.B3.lulus ? `<p><span class="pill ok">KIR lulus</span></p>` : `<p><span class="pill bad">KIR lulus, kondisi di bawah ${G.B3.lulus}</span></p>`;
 }
 function pagi() {
   const kabar = G.kabar(S, false).map(k => `<li>${esc(k)}</li>`).join('');
@@ -82,6 +87,7 @@ function pagi() {
     <section><div class="sec-h"><h2>Armada</h2><span>${S.fleet.length} angkot${freeDrv ? ` · ${freeDrv} sopir menganggur` : ''}</span></div>${S.fleet.map(angkotCard).join('')}</section>
     <section><div class="menu">
       <button class="btn" data-act="modal" data-m="trayek">Trayek</button>
+      ${G.b3on(S) ? `<button class="btn plat-b" data-act="modal" data-m="sidang">Berkas sidang</button>` : ''}
       ${b2 ? `<button class="btn" data-act="modal" data-m="sopir">Sopir${S.cand.length ? ' · ' + S.cand.length + ' pelamar' : ''}</button><button class="btn" data-act="modal" data-m="dealer">Beli angkot</button>`
         : `<button class="btn" data-act="modal" data-m="bayar">Bayar utang</button>`}
       <button class="btn" data-act="modal" data-m="bantuan">Cara main</button>
@@ -177,6 +183,7 @@ function malam() {
   return hdr() + `<main>
     ${rows ? `<section><div class="sec-h"><h2>Setoran sopir</h2></div><div class="kartu" style="padding:4px 14px">${rows}</div></section>` : ''}
     <section><div class="kartu buku"><h2>Buku hari ke-${S.day}</h2>${led}<div class="baris total"><span>Selisih hari ini</span><b class="${tot >= 0 ? 'plus' : 'minus'}">${tot >= 0 ? '+' : '−'}${fmt(Math.abs(tot)).replace('Rp ', '')}</b></div></div></section>
+    ${T.petisi != null && S.bab === 3 ? `<section><div class="karcis"><div class="stub">Petisi</div><div class="isi"><p>+${T.petisi} tanda tangan hari ini</p>${bar(S.b3.petisi, G.B3.target)}<small>${S.b3.petisi} dari ${G.B3.target}</small></div></div></section>` : ''}
     <section><div class="karcis ${T.hit ? 'done' : ''}"><div class="stub">${T.hit ? 'Tercapai' : 'Belum'}</div><div class="isi"><p>Target narik ${fmt(T.target)}, dapat ${fmt(T.narik)}</p>${T.hit && S.streak >= 2 ? `<small>${S.streak} hari berturut-turut.</small>` : ''}</div></div></section>
     ${debt}</main><footer class="cta"><button class="gas" data-act="tutup">Tutup buku</button></footer>`;
 }
@@ -214,6 +221,24 @@ function modalHTML() {
     return sheet('Beli angkot', `<p>Uangmu <b>${fmt(S.money)}</b>. Armada ${S.fleet.length} angkot.</p>` + Object.values(G.DEALER).filter(k => !(k.once && S.flags['beli_' + k.id])).map(k =>
       `<div class="item"><h3>${esc(k.label)}</h3><p>${esc(k.desc)} Kondisi ${k.cond}.</p><button class="btn sm ijo" data-act="beli" data-k="${k.id}" ${!full && S.money >= k.price ? '' : 'disabled'}>${fmt(k.price).replace('Rp ', '')}</button></div>`).join(''));
   }
+  if (m.m === 'sidang') {
+    const sc = G.sidang(S), B = S.b3, P = G.B3;
+    const row = (t, v, max, note) => `<div class="item"><h3>${t}</h3><span class="pill ${v >= max ? 'ok' : v > 0 ? 'warn' : 'bad'}" style="grid-row:1;grid-column:2">${v} / ${max}</span><p class="full">${note}</p></div>`;
+    const on05 = S.fleet.filter(a => a.route === '05' && a.driver);
+    const perDay = on05.reduce((t, a) => t + G.petisiOf(S, a), 0);
+    const kir = S.fleet.map(a => { let btn;
+      if (a.kir) btn = `<span class="pill ${a.cond >= P.lulus ? 'ok' : 'bad'}" style="grid-row:1;grid-column:2">${a.cond >= P.lulus ? 'Lulus' : 'Servis dulu'}</span>`;
+      else if (a.cond < P.kirCond) btn = `<button class="btn sm" data-act="modal" data-m="bengkel" data-id="${a.id}" data-back="sidang">Bengkel</button>`;
+      else btn = `<button class="btn sm ijo" data-act="uji" data-id="${a.id}" ${S.money >= P.kir ? '' : 'disabled'}>Uji ${fmt(P.kir).replace('Rp ', '')}</button>`;
+      return `<div class="item"><h3>${esc(a.name)}</h3><p>Kondisi ${Math.round(a.cond)}. ${a.kir ? `Hari sidang harus ${P.lulus} ke atas.` : a.cond >= P.kirCond ? 'Siap diuji.' : `Perlu kondisi ${P.kirCond}. Servis di bengkel dulu.`}</p>${btn}</div>`; }).join('');
+    return sheet('Berkas sidang', `<p>Sidang izin trayek 05 hari ke-${B.hearing}. Butuh skor <b>${P.win}</b>.</p>
+      <div class="karcis ${sc.total >= P.win ? 'done' : ''}" style="flex-shrink:0"><div class="stub">Skor</div><div class="isi"><p>${sc.total} dari ${P.win} yang dibutuhkan</p>${bar(sc.total, P.win)}<small>${Math.max(0, B.hearing - S.day)} hari lagi</small></div></div>
+        ${row('Petisi penumpang', sc.pet, P.w.pet, `${B.petisi} dari ${P.target} tanda tangan. Sekarang ±${perDay} sehari dari ${on05.length} angkot di trayek 05.`)}
+        ${row('Paguyuban sopir', sc.pag, P.w.pag, `Nama baik ${Math.round(S.rep)}. Penuh di 70, separuh di 55.`)}
+        ${row('Kelayakan armada', sc.arm, P.w.arm, `${sc.okA} dari ${sc.n} angkot lulus KIR dan layak jalan.`)}
+        ${row('Halaman buku Bapak', sc.hal, P.w.hal, B.halaman ? 'Ada di tanganmu.' : 'Belum ada.')}
+      <div class="sec-h" style="margin:6px 0 0"><h2>Uji KIR</h2></div>${kir}`);
+  }
   if (m.m === 'bayar') {
     const sch = S.debt.sched.filter(x => x.amt > 0).map(x => `<div class="baris"><span>Hari ke-${x.day}</span><b>${fmt(x.amt)}</b></div>`).join('');
     return sheet('Utang ke Haji Sobari', `<div class="kartu buku">${sch || '<p>Lunas.</p>'}</div><p>Uangmu <b>${fmt(S.money)}</b>. Bayar lebih awal boleh. Cicilan yang jatuh tempo dipotong otomatis malam itu; kalau kurang, sisanya kena bunga 10%.</p>
@@ -226,6 +251,7 @@ function modalHTML() {
       <li>Kondisi angkot turun tiap rit. Di bawah 40, angkot bisa mogok. Servis di bengkel.</li>
       <li>Sopir membayar setoran tetap dan menanggung bensin. Sisanya dia bawa pulang. Kalau sisanya kurang dari kebutuhannya, dia ngebut, mobil cepat rusak, lalu dia pergi.</li>
       <li>Nama baik menambah penumpang. Naik lewat pilihan yang jujur, turun lewat tunggakan dan sopir ugal-ugalan.</li>
+      ${S && S.bab >= 3 ? '<li>Bab 3: angkot di trayek 05 mengumpulkan tanda tangan petisi tiap hari. Uji KIR semua angkot dan jaga nama baik. Lihat skor di Berkas sidang.</li>' : ''}
       <li>Progres tersimpan di browser ini saja.</li></ul></div>`);
   }
   return '';
@@ -240,7 +266,12 @@ const CARDS = {
   intro: () => ({ eb: 'Bab 1', t: 'Narik Sendiri', b: 'Lunasi utang Bapak, Rp 4,5 juta, dalam 30 hari. Kamu sendiri yang pegang setir.', cta: 'Ambil kunci' }),
   lunas: () => ({ eb: 'Bab 1 selesai', t: 'Si Ijo Selamat', b: `Lunas di hari ke-${S.day}. Sejauh ini kamu sudah narik ${fmt(S.stats.earned)}.`, cta: 'Lanjut' }),
   bab2: () => ({ eb: 'Bab 2', t: 'Sopir Pertama', b: 'Mang Ujang ikut kamu. Ambil angkot kedua, atur setoran, dan kumpulkan 5 angkot.', cta: 'Mulai' }),
-  b_lima: () => ({ eb: 'Bersambung', t: 'Rebutan Trayek', b: `Lima angkot di hari ke-${S.day}. Bab 3 belum dibuat. Kamu masih bisa lanjut mengelola armada.`, cta: 'Lanjut main' })
+  b_lima: () => ({ eb: 'Bab 2 selesai', t: 'Lima Angkot', b: `Lima angkot di hari ke-${S.day}. Haji Sobari mulai bergerak.`, cta: 'Lanjut' }),
+  bab3: () => ({ eb: 'Bab 3', t: 'Rebutan Trayek', b: `Sidang izin trayek 05 di hari ke-${S.b3.hearing}. Kumpulkan petisi penumpang, lulus uji KIR, dan rebut dukungan paguyuban.`, cta: 'Mulai' }),
+  b3_sidang: () => { const R = S.b3.result;
+    if (R.deal) return { eb: 'Bersambung', t: 'Tiga Kursi', b: 'Kamu menjual dua angkot dan mundur dari sidang. Bab 4 belum dibuat. Kamu masih bisa lanjut mengelola armada.', cta: 'Lanjut main' };
+    return R.win ? { eb: 'Bersambung', t: 'Trayek Bapak', b: `Menang sidang dengan skor ${R.total}. Trayek 05 tidak lagi dibanjiri angkot biru. Bab 4 belum dibuat. Kamu masih bisa lanjut mengelola armada.`, cta: 'Lanjut main' }
+      : { eb: 'Bersambung', t: 'Kuota Dua', b: `Skor ${R.total}, butuh ${G.B3.win}. Kamu hanya boleh menaruh ${G.B3.kuota} angkot di trayek 05. Bab 4 belum dibuat. Kamu masih bisa lanjut mengelola armada.`, cta: 'Lanjut main' }; }
 };
 function scNext() {
   const sc = U.sc; if (!sc || sc.choosing) return;
@@ -267,7 +298,7 @@ function sceneHTML() {
   const bub = `${nar ? '' : `<div class="wajah" style="--c:${C.c}" aria-hidden="true">${esc(name.replace(/^(Mang|Teh|Haji|Bang|Kang|Bu) /, '')[0])}</div>`}
     <div class="bicara ${nar ? 'narator' : ''}">${nar ? '' : `<span class="tag" style="--c:${C.c}">${esc(name)}</span>`}<p>${esc(text)}</p>${sc.choosing ? '' : '<span class="ketuk">Ketuk untuk lanjut</span>'}</div>`;
   if (sc.choosing) { const ch = sc.q[sc.qi].choices;
-    return `<div class="lapis gelap"><div class="adegan" style="cursor:default">${bub}<div class="pilihan" style="margin-top:12px">${ch.map((c, i) => `<button data-act="sc-pick" data-i="${i}" ${c.ok ? '' : 'disabled'}><b>${esc(c.label)}</b>${c.ok ? '' : '<small>Uang tidak cukup</small>'}</button>`).join('')}</div></div></div>`; }
+    return `<div class="lapis gelap"><div class="adegan" style="cursor:default">${bub}<div class="pilihan" style="margin-top:12px">${ch.map((c, i) => `<button data-act="sc-pick" data-i="${i}" ${c.ok ? '' : 'disabled'}><b>${esc(c.label)}</b>${c.ok ? '' : `<small>${esc(c.why || 'Uang tidak cukup')}</small>`}</button>`).join('')}</div></div></div>`; }
   return `<div class="lapis gelap"><button class="adegan" data-act="sc-next" id="sc-btn">${bub}</button></div>`;
 }
 function cardHTML() { const c = U.card; if (!c) return ''; return `<div class="lapis gelap"><div class="kartu-bab"><span class="eyebrow" style="color:#111">${esc(c.eb)}</span><h2>${esc(c.t)}</h2><p>${esc(c.b)}</p><button class="btn" data-act="card-ok" id="card-btn">${esc(c.cta)}</button></div></div>`; }
@@ -281,7 +312,7 @@ function title() {
     ${sv ? `<button class="gas kuning" data-act="lanjut">Lanjutkan · hari ke-${sv.day}</button>
         ${U.ask ? `<p class="kecil" style="text-align:center">Progres lama akan dihapus.</p><button class="btn" data-act="baru-ya">Ya, mulai dari awal</button>` : `<button class="btn-teks" data-act="baru-tanya">Mulai dari awal</button>`}`
       : `<label class="fld">Namamu<input id="nama" maxlength="16" value="Bayu" autocomplete="off"></label><button class="gas" data-act="mulai">Mulai narik</button>`}
-    <p class="kecil">Prototipe Bab 1 dan 2. Progres tersimpan di browser ini saja.</p></div>`;
+    <p class="kecil">Prototipe Bab 1 sampai 3. Progres tersimpan di browser ini saja.</p></div>`;
 }
 
 /* ---------- render ---------- */
@@ -312,14 +343,15 @@ const ACT = {
   lanjut() { const s = load(); if (s) begin(s, false); },
   'baru-tanya'() { U.ask = true; render(); },
   'baru-ya'() { wipe(); U.ask = false; render(); },
-  modal(d) { U.modal = { m: d.m, id: d.id }; render(); },
-  close() { U.modal = null; render(); },
+  modal(d) { U.modal = { m: d.m, id: d.id, back: d.back }; render(); },
+  close() { U.modal = U.modal && U.modal.back ? { m: U.modal.back } : null; render(); },
   bg(d, e) { if (e.target.dataset.act === 'bg') { U.modal = null; render(); } },
   set(d) { const a = S.fleet.find(x => x.id === d.id); G.setSetoran(S, d.id, a.setoran + (+d.d)); render(); },
   servis(d) { if (G.service(S, U.modal.id, d.k)) toast('Servis selesai.'); render(); },
   up(d) { if (G.upgrade(S, U.modal.id, d.k)) toast(G.UPGRADES[d.k].name + ' terpasang.'); render(); },
   cat(d) { G.paint(S, U.modal.id, d.c); render(); },
   nama() { G.rename(S, U.modal.id, document.getElementById('nm-angkot').value.trim(), document.getElementById('st-angkot').value.trim()); toast('Tersimpan.'); render(); },
+  uji(d) { const r = G.ujiKir(S, d.id); if (r === true) toast('Lulus uji KIR.'); else if (r === 'gagal') toast('Tidak lulus. Kondisinya kurang.'); render(); },
   izin(d) { if (G.openRoute(S, d.r)) toast('Izin trayek ' + d.r + ' keluar. Pilih trayeknya di kartu angkot.'); render(); },
   rekrut(d) { if (G.hire(S, d.d)) { const a = S.fleet.find(x => !x.driver); if (a) G.assign(S, a.id, d.d); toast(G.DRIVERS[d.d].name + ' bergabung' + (a ? ' dan membawa ' + a.name + '.' : '. Belum ada angkot kosong.')); } render(); },
   pecat(d) { G.fire(S, d.d); render(); },

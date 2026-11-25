@@ -1,7 +1,7 @@
 # Narik — catatan proyek
 
 Web game manajemen angkot dengan cerita, bahasa Indonesia, dimainkan di browser HP (portrait).
-Status: prototipe Bab 1–2 bisa dimainkan dari awal sampai "bersambung".
+Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 
 ## Perintah
 
@@ -18,6 +18,14 @@ Status: prototipe Bab 1–2 bisa dimainkan dari awal sampai "bersambung".
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 
 Alur satu hari: `startDay` → pemain mengatur armada → `depart` → tiga kali (`rollEvent` → `resolveEvent` → `runShift`) → `endDay` → adegan malam (`scenes`/`sceneDone`) → `nextDay`.
+
+Bab 3 (Rebutan Trayek) disimpan di `s.b3` (`start`, `hearing`, `petisi`, `halaman`, `suap`, `deal`, `result`). Semua angka di `G.B3`.
+Selama `G.b3on(s)`, mod `biru` menurunkan permintaan trayek 05 ×0,9, dan `endDay` memanggil `b3Day`:
+tiap angkot yang jalan di trayek 05 menambah petisi (`G.petisiOf`). Di hari sidang `G.sidang(s)` dihitung jadi `s.b3.result`.
+Skor: petisi 30, paguyuban 25 (nama baik ≥70, separuh di ≥55), armada 30 (angkot dengan `a.kir` dan kondisi ≥50), halaman buku Bapak 15.
+Menang di skor 75: mod `trayek_bapak` (05 ×1,1). Kalah: `s.kuota05 = 2`, angkot lebihan dipindah (`kuotaFix`), dan kalau tidak ada izin lain
+pemain dapat izin 09 gratis. Jalan ketiga: terima tawaran Sobari di adegan `b3_tekanan` (jual 2 angkot, kuota 3, tanpa sidang).
+Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik −15.
 
 ## Pilar desain
 
@@ -44,11 +52,29 @@ Bab 2, rata-rata hari sampai 5 angkot (pemain ikut narik): setoran bawaan 36 har
 0,80 → 33 hari dengan rata-rata 1 sopir pergi; 1,0 → 32 hari dengan 2,5 sopir pergi dan nama baik anjlok;
 0,40 → 43 hari. Tanpa ikut narik: sekitar 70 hari, dan 22% permainan tidak sampai.
 
+Bab 3, peluang menang sidang (bot ikut narik, setoran bawaan, nama baik bot ±90):
+
+| Gaya main | Menang | Skor rata-rata |
+|---|---|---|
+| 2 angkot di 05, semua uji KIR, tebus halaman | 97% | 99 |
+| 3 angkot di 05, sama | 97% | 98 (uang akhir ±2,4 jt lebih sedikit) |
+| 1 angkot di 05, sama | 63% | 74 |
+| 2 di 05, KIR, tanpa halaman | 97% | 84 |
+| 2 di 05, halaman, tanpa uji KIR | 16% | 69 |
+| Selalu pilihan terakhir | 0% | 32 |
+
+Karena nama baik bot hampir selalu di atas 70, pilar paguyuban hampir selalu penuh di sim. Pemain sungguhan
+mungkin lebih sering kehilangan pilar ini.
+
 Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain sungguhan.
 
 ## Yang belum ada
 
-- Bab 3–5 (rebutan trayek, masuknya ojol, integrasi Pemkot dan beberapa akhir cerita).
+- Bab 4–5 (masuknya ojol, integrasi Pemkot dan beberapa akhir cerita). Bab 3 berakhir dengan kartu "Bersambung"
+  dan permainan tetap bisa lanjut tanpa target bab.
+- Masalah ekonomi Bab 2 yang terlihat saat menguji Bab 3: kalau 5 angkot semuanya di trayek 05 dan masih ada dua cicilan
+  kredit, uang turun ratusan ribu per hari bahkan tanpa angkot biru, lalu angkot terjual paksa di −Rp 800 rb.
+  Adegan pembuka Bab 3 sekarang memberi peringatan, tapi akar masalahnya di Bab 2 belum diseimbangkan.
 - Simpan lintas perangkat, suara, tutorial bertahap, pencapaian, berbagi tangkapan layar.
 - Pendapatan saat pemain pergi sudah ada (`G.offline`, maks 8 jam, hanya Bab 2) tapi belum diseimbangkan.
 - Peta masih skematis; sprite angkot cuma satu sudut dan warna lain memakai filter CSS.

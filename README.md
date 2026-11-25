@@ -1,7 +1,7 @@
 # Narik — Kisah Juragan Angkot
 
 Prototipe web game manajemen angkot dengan cerita. Mulai dari satu angkot warisan
-dan utang Rp 4,5 juta, sampai punya lima angkot.
+dan utang Rp 4,5 juta, sampai punya lima angkot dan merebut kembali trayek Bapak di sidang Dishub.
 
 ## Jalankan
 

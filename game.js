@@ -47,6 +47,9 @@ G.DEALER = {
 G.NAMES = ['Si Ijo', 'Berkah Jalan', 'Putra Cibening', 'Sinar Pagi', 'Laskar Pasar', 'Si Kabayan', 'Bintang 05', 'Mekar Jaya'];
 G.SERVIS = { ringan: { price: 120, add: 22, name: 'Servis ringan' }, besar: { price: 340, add: 55, name: 'Servis besar' } };
 G.MAX_FLEET = 8;
+/* Bab 3: sidang perpanjangan izin trayek 05 */
+G.B3 = { len: 30, target: 900, kir: 120, kirCond: 60, lulus: 50, win: 75, kuota: 2,
+  w: { pet: 30, pag: 25, arm: 30, hal: 15 } };
 
 /* ---------- util ---------- */
 function rng(s) {
@@ -80,6 +83,9 @@ G.expNet = rid => { const r = G.ROUTES[rid]; return r.base[0] + r.base[1] + r.ba
 G.drv = (s, a) => (a.driver && a.driver !== 'self') ? s.drivers[a.driver] : null;
 G.active = s => s.fleet.filter(a => a.driver && !a.off);
 G.living = s => s.bab === 1 ? 35 : 60;
+G.b3on = s => s.bab === 3 && !!s.b3 && !s.b3.result;
+G.d3 = s => s.b3 ? s.day - s.b3.start : -1;
+G.kuotaFull = (s, rid, except) => rid === '05' && !!s.kuota05 && s.fleet.filter(a => a !== except && a.route === '05').length >= s.kuota05;
 
 function newAngkot(s, o) {
   const a = { id: 'a' + (s.nextId++), name: o.name, cond: o.cond, color: o.color || 'hijau',
@@ -192,7 +198,7 @@ const EVENTS = [
   { id: 'razia', w: 2, ok: s => s.day >= 4 && !hasMod(s, 'kir'), title: 'Razia gabungan',
     text: (s, c) => say(c, `Razia di perempatan. Petugas memeriksa buku KIR ${c.a.name}: masa berlakunya sudah lewat.`, `Bos, kena razia. KIR ${c.a.name} mati katanya.`),
     choices: (s, c, sh) => [
-      { label: 'Urus KIR resmi', hint: 'Rp 180 rb, aman 25 hari', ok: s.money >= 180, run: () => { cash(s, -180, 'Surat & denda'); rep(s, 3); addMod(s, { id: 'kir', until: s.day + 25 }); tmul(s, c, sh, 0.6); return 'Antre lama di Dishub, tapi sekarang surat lengkap. Sopir lain mulai segan.'; } },
+      { label: 'Urus KIR resmi', hint: 'Rp 180 rb, aman 25 hari', ok: s.money >= 180, run: () => { cash(s, -180, 'Surat & denda'); rep(s, 3); addMod(s, { id: 'kir', until: s.day + 25 }); if (s.bab === 3 && c.a.cond >= G.B3.kirCond) c.a.kir = true; tmul(s, c, sh, 0.6); return 'Antre lama di Dishub, tapi sekarang surat lengkap. Sopir lain mulai segan.'; } },
       { label: 'Titip sidang ke oknum', hint: 'Rp 60 rb, nama baik turun', ok: s.money >= 60, run: () => { cash(s, -60, 'Surat & denda'); rep(s, -3); return 'Urusan beres dalam lima menit. Minggu depan dia pasti menunggu di tempat yang sama.'; } },
       { label: 'Terima ditilang', hint: 'Rp 100 rb', run: () => { cash(s, -100, 'Surat & denda'); tmul(s, c, sh, 0.8); return 'Slip biru di tangan. KIR tetap mati.'; } }] },
   { id: 'dompet', w: 2, title: 'Dompet tertinggal',
@@ -271,7 +277,33 @@ const EVENTS = [
     text: () => 'Seorang anak kurus mendekat sambil menenteng lap. “Kang, saya Jajang. Butuh kernet? Nggak usah digaji. Makan siang aja.”',
     choices: (s) => [
       { label: 'Terima jadi kernet', hint: 'Rp 10 rb sehari, pendapatan +8%', run: () => { s.flags.kernet_tanya = true; s.flags.kernet = true; return 'Jajang langsung gelantungan di pintu. “Pasar, pasar, pasar! Kosong, Bu, kosong!”'; } },
-      { label: 'Belum bisa', hint: 'Mungkin lain waktu', run: () => { s.flags.kernet_tanya = true; return '“Nggak apa-apa, Kang. Saya di sini terus kok.”'; } }] }
+      { label: 'Belum bisa', hint: 'Mungkin lain waktu', run: () => { s.flags.kernet_tanya = true; return '“Nggak apa-apa, Kang. Saya di sini terus kok.”'; } }] },
+  /* --- Bab 3 --- */
+  { id: 'b3_gratis', w: 4, ok: (s, c) => G.b3on(s) && c.a.route === '05' && !hasMod(s, 'gratis_cd'), title: 'Angkot biru gratis',
+    text: (s, c) => say(c, 'Angkot biru Haji Sobari memasang kertas di kaca: “GRATIS SAMPAI PASAR”. Penumpang di halte langsung pindah antre.', 'Bos, angkot biru gratisin penumpang ke pasar! Halte kosong buat kita.'),
+    choices: (s, c, sh) => [
+      { label: 'Ikut gratiskan rit ini', hint: 'Rit ini hampir kosong, petisi +40', run: () => { addMod(s, { id: 'gratis_cd', until: s.day + 5 }); tmul(s, c, sh, 0.3); s.b3.petisi += 40; rep(s, 2); return 'Ibu-ibu pasar tertawa. “Dua-duanya gratis, ya naik yang langganan.” Map petisi penuh satu halaman.'; } },
+      { label: 'Biarkan, tetap tarik ongkos', hint: 'Rit ini sepi', run: () => { addMod(s, { id: 'gratis_cd', until: s.day + 5 }); tmul(s, c, sh, 0.7); return 'Yang naik cuma langganan lama. Mereka bayar sambil menggerutu soal angkot biru.'; } }] },
+  { id: 'b3_pengajian', w: 3, ok: s => G.b3on(s) && !s.flags.b3_ngaji, title: 'Pengajian akbar',
+    text: (s, c) => say(c, 'Ketua majelis taklim pasar menawarkan bantuan: jemaahnya mau tanda tangan petisi, asal diantar ke pengajian akbar hari ini. Gratis.', 'Bos, ibu-ibu majelis taklim mau tanda tangan petisi semua. Syaratnya diantar ke pengajian, gratis.'),
+    choices: (s, c, sh) => [
+      { label: 'Antar gratis', hint: 'Rit ini setengah, petisi +80', run: () => { s.flags.b3_ngaji = true; tmul(s, c, sh, 0.5); s.b3.petisi += 80; rep(s, 2); return 'Delapan puluh tanda tangan, lengkap dengan nomor KTP. Ada yang menambahkan doa di pinggir kertas.'; } },
+      { label: 'Tidak bisa sekarang', hint: 'Tetap di trayek', run: () => { s.flags.b3_ngaji = true; return '“Ya sudah. Mungkin angkot biru mau.”'; } }] },
+  { id: 'b3_bajak', w: 3, ok: (s, c) => G.b3on(s) && !c.self && !hasMod(s, 'bajak_cd'), title: 'Sopirmu dibajak',
+    text: (s, c) => `${c.who} menunjukkan pesan dari Kohar. “Pindah ke Pak Haji. Setoran lebih ringan dua puluh ribu. Mulai besok.”`,
+    choices: (s, c, sh) => [
+      { label: 'Turunkan setorannya Rp 20 rb', hint: 'Setoran turun, makin setia', run: () => { addMod(s, { id: 'bajak_cd', until: s.day + 6 }); c.a.setoran = clamp(c.a.setoran - 20, 60, 260); c.a.setoranSet = true; c.dr.loyalty = clamp(c.dr.loyalty + 10, 0, 100); return `${c.who} menghapus pesan itu di depanmu. “Saya di sini saja, Bos.”`; } },
+      { label: 'Percayakan padanya', hint: c.dr.loyalty >= 55 ? 'Dia cukup setia' : 'Kesetiaannya rendah', run: () => { addMod(s, { id: 'bajak_cd', until: s.day + 6 }); if (c.dr.loyalty >= 55) { c.dr.loyalty = clamp(c.dr.loyalty + 4, 0, 100); return '“Pak Haji pecat Mang Ujang karena ngopi. Saya nggak mau kerja di tempat begitu.”'; } c.dr.loyalty = clamp(c.dr.loyalty - 12, 0, 100); return `${c.who} diam lama sebelum menjawab. “Saya pikir-pikir dulu, Bos.”`; } }] },
+  { id: 'b3_wartawan', w: 2, ok: s => G.b3on(s) && !s.flags.b3_koran, title: 'Wartawan koran',
+    text: () => 'Wartawan “Kabar Cibening” mencegatmu di terminal. Dia sedang menulis soal sidang trayek 05 dan mau dengar dari pihakmu.',
+    choices: (s) => [
+      { label: 'Cerita soal Bapak, apa adanya', hint: 'Nama baik naik, petisi bertambah', run: () => { s.flags.b3_koran = true; rep(s, 4); s.b3.petisi += 30; return 'Besoknya fotomu di samping Si Ijo masuk halaman tiga. Judulnya: “Anak Sopir Melawan.”'; } },
+      { label: '“Tidak ada komentar.”', hint: 'Aman', run: () => { s.flags.b3_koran = true; return 'Wartawan itu beralih ke Kohar. Kamu tidak mau tahu apa yang dia tulis.'; } }] },
+  { id: 'b3_oknum', w: 2, ok: s => G.b3on(s) && G.d3(s) >= 8 && !s.flags.b3_oknum, title: 'Jalur cepat',
+    text: () => 'Seorang pria berseragam cokelat duduk di sampingmu di warung. “Sidangnya bisa saya bantu. Satu setengah juta. Dijamin lancar.”',
+    choices: (s) => [
+      { label: 'Tolak', hint: 'Nama baik naik', run: () => { s.flags.b3_oknum = true; rep(s, 2); return 'Dia mengangkat bahu dan membayar kopinya sendiri. Untuk pertama kalinya.'; } },
+      { label: 'Bayar', hint: 'Rp 1,5 jt. Bisa ketahuan', ok: s.money >= 1500, run: () => { s.flags.b3_oknum = true; s.b3.suap = true; cash(s, -1500, 'Lain-lain'); return 'Amplop berpindah tangan di bawah meja. Dia tidak memberi kuitansi.'; } }] }
 ];
 G.EVENTS = EVENTS;
 
@@ -396,6 +428,7 @@ G.endDay = function (s) {
       adhoc(s, 'malam', [[dr.id, 'Bos, tiga hari ini saya nombok terus. Setorannya ketinggian buat trayek segini.'], ['narator', `Catatan: setoran ${a.name} lebih besar daripada yang bisa didapat ${D.name}. Turunkan setoran atau pindahkan trayeknya.`]]);
     }
   }
+  if (G.b3on(s)) b3Day(s);
   // utang ke Haji Sobari
   const due = s.debt.sched.find(x => x.day === s.day && x.amt > 0);
   if (due) {
@@ -423,6 +456,53 @@ G.endDay = function (s) {
     adhoc(s, 'malam', [['kohar', `Utang warung, utang bengkel, utang bensin. Pak Haji mau bantu: ${a.name} dia beli, Rp 1,3 juta. Tunai.`], ['narator', `Kamu tidak punya pilihan. ${a.name} berpindah tangan dan dicat biru.`]]);
   }
   return { rows, ledger: T.ledger, hit: T.hit, target: T.target, narik: T.narik };
+};
+
+/* Bab 3: petisi harian dan hasil sidang */
+G.petisiOf = function (s, a) {
+  let n = 5 + s.rep / 10;
+  if (a.driver === 'self') n *= 1.2;
+  const dr = G.drv(s, a); if (dr && dr.id === 'tini') n *= dr.perk ? 1.6 : 1.3;
+  return Math.round(n);
+};
+function b3Day(s) {
+  const B = s.b3; let add = 0;
+  for (const a of s.fleet) { const P = s.today.per[a.id]; if (a.route === '05' && a.driver && !a.off && P && P.gross > 0) add += G.petisiOf(s, a); }
+  B.petisi += add; s.today.petisi = add;
+  if (s.day >= B.hearing) {
+    const sc = G.sidang(s); let total = sc.total, exposed = false;
+    if (B.suap) { if (rng(s) < 0.5) { exposed = true; total -= 25; rep(s, -15); } else total += 20; }
+    total = Math.round(total);
+    const win = total >= G.B3.win;
+    B.result = Object.assign({}, sc, { total, exposed, win, day: s.day });
+    s.mods = s.mods.filter(m => m.id !== 'biru');
+    if (win) { addMod(s, { id: 'trayek_bapak', route: '05', demand: 1.1 }); rep(s, 5); }
+    else { s.kuota05 = G.B3.kuota; addMod(s, { id: 'biru', route: '05', demand: 0.9 }); kuotaFix(s); }
+  }
+}
+function kuotaFix(s) {
+  let n = 0;
+  for (const a of s.fleet) {
+    if (a.route !== '05') continue; n++; if (n <= s.kuota05) continue;
+    let r = Object.keys(s.routes).find(k => k !== '05' && s.routes[k]);
+    if (!r) { s.routes['09'] = true; r = '09'; s.flags.izin_ganti = true; }
+    a.route = r; if (!a.setoranSet) a.setoran = Math.round(G.expNet(r) * 0.56 / 10) * 10;
+  }
+}
+G.sidang = function (s) {
+  const B = s.b3 || { petisi: 0 };
+  const W = G.B3.w;
+  const pet = Math.min(1, B.petisi / G.B3.target) * W.pet;
+  const pag = s.rep >= 70 ? W.pag : s.rep >= 55 ? Math.round(W.pag / 2) : 0;
+  const okA = s.fleet.filter(a => a.kir && a.cond >= G.B3.lulus).length;
+  const arm = s.fleet.length ? okA / s.fleet.length * W.arm : 0;
+  const hal = B.halaman ? W.hal : 0;
+  return { pet: Math.round(pet), pag, arm: Math.round(arm), hal, okA, n: s.fleet.length, total: Math.round(pet + pag + arm + hal) };
+};
+G.ujiKir = function (s, aid) {
+  const a = s.fleet.find(x => x.id === aid); if (!a || a.kir || s.bab < 3 || s.money < G.B3.kir) return false;
+  if (a.cond < G.B3.kirCond) return 'gagal';
+  cash(s, -G.B3.kir, 'Surat & denda'); a.kir = true; return true;
 };
 
 G.nextDay = function (s) {
@@ -458,7 +538,7 @@ G.assign = function (s, aid, who) {
   a.driver = who || null;
   if (who && who !== 'self') { const en = G.expNet(a.route); a.setoran = clamp(a.setoran, 60, 260); if (!a.setoranSet) a.setoran = Math.round(en * 0.56 / 10) * 10; }
 };
-G.setRoute = function (s, aid, rid) { const a = s.fleet.find(x => x.id === aid); if (a && s.routes[rid]) { a.route = rid; if (!a.setoranSet) a.setoran = Math.round(G.expNet(rid) * 0.56 / 10) * 10; } };
+G.setRoute = function (s, aid, rid) { const a = s.fleet.find(x => x.id === aid); if (a && s.routes[rid] && a.route !== rid && !G.kuotaFull(s, rid, a)) { a.route = rid; if (!a.setoranSet) a.setoran = Math.round(G.expNet(rid) * 0.56 / 10) * 10; } };
 G.setSetoran = function (s, aid, v) { const a = s.fleet.find(x => x.id === aid); if (a) { a.setoran = clamp(Math.round(v / 10) * 10, 60, 260); a.setoranSet = true; } };
 G.hire = function (s, id) {
   if (!s.cand.includes(id)) return false; const D = G.DRIVERS[id];
@@ -474,7 +554,7 @@ G.buy = function (s, kind) {
   cash(s, -K.price, 'Beli angkot');
   const used = s.fleet.map(a => a.name); const name = G.NAMES.find(n => !used.includes(n)) || ('Angkot ' + (s.fleet.length + 1));
   const a = newAngkot(s, { name, cond: K.cond, mesin: K.mesin, loan: K.daily ? { daily: K.daily, left: K.days } : null });
-  a.route = '05'; s.today.per[a.id] = { gross: 0, fuel: 0, mult: [1, 1, 1], notes: [] };
+  a.route = G.kuotaFull(s, '05', a) ? (Object.keys(s.routes).find(k => k !== '05' && s.routes[k]) || '05') : '05'; s.today.per[a.id] = { gross: 0, fuel: 0, mult: [1, 1, 1], notes: [] };
   return a;
 };
 G.rename = function (s, aid, name, stiker) { const a = s.fleet.find(x => x.id === aid); if (!a) return; if (name) a.name = name.slice(0, 18); if (stiker != null) a.stiker = stiker.slice(0, 22).toUpperCase(); };
@@ -587,9 +667,99 @@ const STORY = [
       ['sobari', 'Bulan depan izin trayek 05 diperpanjang. Yang pegang suara di Dishub itu saya.'],
       ['sobari', 'Kita lihat kamu masih punya trayek atau tidak.'],
       ['narator', 'Lampu belakang sedannya menghilang di ujung gang.'],
-      ['ujang', 'Halaman yang disobek dari buku bapakmu itu… saya tahu siapa yang pegang.'],
-      ['narator', 'BERSAMBUNG — Bab 3: Rebutan Trayek.']],
-    done: s => { s.flags.tamat = s.day; } }
+      ['ujang', 'Halaman yang disobek dari buku bapakmu itu… saya tahu siapa yang pegang.']],
+    done: s => { s.flags.tamat = s.day; } },
+  /* ---------- Bab 3: Rebutan Trayek ---------- */
+  { id: 'bab3', when: 'pagi', test: s => s.bab === 2 && s.flags.tamat && s.day > s.flags.tamat,
+    lines: s => [
+      ['narator', 'Pak RT mengantar sepucuk surat bercap Dinas Perhubungan Kota Cibening.'],
+      ['dimas', `“Sidang perpanjangan izin trayek 05. Hari ke-${s.day + G.B3.len}.” Penilaiannya tiga, Kak: dukungan penumpang, dukungan paguyuban sopir, kelayakan armada.`],
+      ['narator', 'Siangnya angkot biru di terminal bertambah. Enam. Delapan. Sepuluh. Semuanya trayek 05.'],
+      ['ujang', 'Dia banjiri trayeknya. Penumpang dibagi tipis-tipis, biar di sidang kelihatan kita tidak perlu ada.'],
+      ...(s.routes['09'] || s.routes['12'] ? [] : [['ujang', 'Kalau semua mobilmu di 05, kamu ikut tenggelam. Urus izin trayek lain, taruh dua atau tiga saja di 05.']]),
+      ['dimas', 'Kita bikin petisi. Tiap angkot kita yang lewat trayek 05 bawa map tanda tangan. Langganan pasti mau.'],
+      ['rina', `Satu lagi. Semua mobil harus lulus uji KIR. Kondisinya minimal ${G.B3.kirCond} waktu diuji, dan jangan sampai di bawah ${G.B3.lulus} pas hari sidang. Dishub cek ulang.`]],
+    done: s => {
+      s.bab = 3;
+      s.b3 = { start: s.day, hearing: s.day + G.B3.len, petisi: 0, halaman: false, suap: false, deal: false, result: null };
+      addMod(s, { id: 'biru', route: '05', demand: 0.9, until: s.b3.hearing });
+    } },
+  { id: 'b3_endang', when: 'malam', test: s => G.b3on(s) && G.d3(s) >= 3,
+    lines: s => [
+      ['narator', 'Rapat paguyuban sopir di warung terminal. Asap kretek, kopi hitam, dan tiga puluh pasang mata yang menatapmu.'],
+      ['endang', 'Saya Endang, ketua paguyuban. Kami tidak memihak juragan mana pun. Juragan datang dan pergi.'],
+      ['endang', 'Kami memihak nama yang bersih. Nama baikmu 70 ke atas, paguyuban berdiri di belakangmu di sidang.'],
+      ['endang', 'Di atas 55, kami datang, tapi diam. Di bawah itu, jangan harap.'],
+      ['narator', `Nama baikmu sekarang ${Math.round(s.rep)}.`]] },
+  { id: 'b3_halaman', when: 'malam', test: s => G.b3on(s) && G.d3(s) >= 9 && !s.b3.halaman,
+    lines: s => [
+      ['ujang', 'Halaman yang disobek dari buku bapakmu ada di Kohar. Pak Haji suruh dia bakar. Dia simpan. Buat jaga-jaga, katanya.'],
+      ['narator', 'Kohar menunggu di ujung gang, tanpa sedan putih. Dia kelihatan lebih tua dari biasanya.'],
+      ['kohar', 'Saya cuma tukang tagih. Tapi saya juga punya anak, dan Pak Haji sudah tiga bulan tidak bayar saya.'],
+      ['kohar', 'Isinya surat pembagian trayek. Tiga dan tiga, ditandatangani dua-duanya. Di sidang, itu berat.']],
+    choices: s => [
+      { label: 'Tebus Rp 1 juta', ok: s.money >= 1000, why: 'Uang tidak cukup', run: () => { cash(s, -1000, 'Lain-lain'); s.b3.halaman = true; return [['kohar', 'Jangan bilang dari saya.'], ['narator', 'Kertasnya menguning, tapi tanda tangan Bapak masih jelas. Di sebelahnya: Sobari.']]; } },
+      { label: 'Bujuk dia baik-baik', ok: s.rep >= 65, why: 'Butuh nama baik 65', run: () => { s.b3.halaman = true; rep(s, 1); return [['kohar', 'Semua orang di terminal bilang kamu lurus. Bapakmu juga dulu begitu.'], ['kohar', 'Ambil. Saya sudah capek jadi orang jahat di cerita orang lain.']]; } },
+      { label: 'Biarkan dulu', ok: true, run: () => [['kohar', 'Terserah. Tapi tawarannya tidak lama.']] }] },
+  { id: 'b3_halaman2', when: 'malam', test: s => G.b3on(s) && G.d3(s) >= 20 && !s.b3.halaman && s.seen.b3_halaman,
+    lines: s => [
+      ['kohar', 'Pak Haji mulai curiga. Kalau mau, malam ini terakhir.'],
+      ['kohar', 'Harganya naik. Saya harus pindah kota setelah ini.']],
+    choices: s => [
+      { label: 'Tebus Rp 1,5 juta', ok: s.money >= 1500, why: 'Uang tidak cukup', run: () => { cash(s, -1500, 'Lain-lain'); s.b3.halaman = true; return [['narator', 'Kohar menyerahkan amplop cokelat, lalu pergi tanpa menoleh.']]; } },
+      { label: 'Lepaskan', ok: true, run: () => [['narator', 'Lampu motor Kohar menghilang di tikungan. Halaman itu ikut pergi.']] }] },
+  { id: 'b3_tekanan', when: 'malam', test: s => G.b3on(s) && G.d3(s) >= 15 && s.fleet.length >= 4,
+    lines: s => [
+      ['narator', 'Sedan putih. Kali ini Haji Sobari sendiri yang turun, dan dia tersenyum.'],
+      ['sobari', 'Kita tidak usah ribut di depan orang Dishub. Malu.'],
+      ['sobari', 'Jual dua angkotmu ke saya, Rp 1,3 juta satu. Kamu tetap pegang tiga di trayek 05, saya tarik angkot-angkot biru itu. Tidak ada sidang.']],
+    choices: s => [
+      { label: '“Kita ketemu di sidang, Pak Haji.”', ok: true, run: () => { rep(s, 2); return [['sobari', 'Bapakmu juga bilang begitu dua puluh tahun lalu.'], ['sobari', 'Dia kalah.']]; } },
+      { label: 'Terima tawarannya', ok: true, run: () => {
+        const sold = s.fleet.slice().sort((x, y) => x.cond - y.cond).slice(0, 2);
+        s.fleet = s.fleet.filter(a => !sold.includes(a)); cash(s, 2600, 'Jual angkot');
+        for (const a of sold) { const dr = G.drv(s, a); if (dr) { dr.loyalty = clamp(dr.loyalty - 10, 0, 100); } }
+        s.b3.deal = true; s.kuota05 = 3; s.mods = s.mods.filter(m => m.id !== 'biru'); kuotaFix(s);
+        s.b3.result = { deal: true, win: false, day: s.day, total: 0 };
+        return [['narator', `${sold.map(a => a.name).join(' dan ')} dicat biru minggu itu juga.`], ['ujang', 'Saya tidak akan bilang kamu salah, Jang. Tapi bapakmu tidak akan ambil uang itu.']]; } }] },
+  { id: 'b3_wulan', when: 'malam', test: s => G.b3on(s) && G.d3(s) >= 22,
+    lines: s => { const sc = G.sidang(s), L = [
+      ['narator', 'Seorang perempuan berseragam Dishub naik Si Ijo dari pasar sampai terminal. Diam sepanjang jalan, mencatat.'],
+      ['wulan', 'Saya Wulan, kepala seksi angkutan. Saya yang memimpin sidang. Saya tidak terima tamu di kantor, jadi saya naik angkot.']];
+      if (sc.pet < G.B3.w.pet) L.push(['wulan', `Tanda tangan penumpang baru ${s.b3.petisi} dari ${G.B3.target}. Angkot yang lewat 05 yang paling didengar penumpangnya.`]);
+      if (sc.okA < sc.n) L.push(['wulan', `Armadamu ${sc.n}, yang KIR-nya beres dan layak jalan baru ${sc.okA}.`]);
+      if (sc.pag < G.B3.w.pag) L.push(['wulan', 'Paguyuban belum bulat di belakangmu. Mereka lihat nama baik.']);
+      if (!s.b3.halaman) L.push(['wulan', 'Dan saya dengar ada dokumen lama soal pembagian trayek ini. Kalau ada, bawa.']);
+      if (L.length === 2) L.push(['wulan', 'Berkasmu lengkap. Sampai ketemu di sidang.']);
+      return L; } },
+  { id: 'b3_sidang', when: 'malam', test: s => s.bab === 3 && s.b3 && s.b3.result && !s.flags.tamat3,
+    lines: s => { const R = s.b3.result;
+      if (R.deal) return [
+        ['narator', 'Seminggu kemudian, perkara trayek 05 dicoret dari jadwal sidang Dishub. Alasannya: “sudah ada kesepakatan para pihak”.'],
+        ['narator', 'Kamu pegang tiga kursi di trayek 05. Sisanya biru.'],
+        ['dimas', 'Kak, kita masih punya trayek lain. Masih bisa tumbuh.'],
+        ['narator', 'BERSAMBUNG — Bab 4: Ojol Masuk Kota.']];
+      const L = [
+        ['narator', 'Ruang rapat Dishub. Haji Sobari duduk di kursi depan bersama dua pengacara.'],
+        ['wulan', `Dukungan penumpang: ${s.b3.petisi} tanda tangan.`],
+        ['wulan', R.pag >= G.B3.w.pag ? 'Paguyuban sopir menyatakan dukungan penuh.' : R.pag > 0 ? 'Paguyuban hadir, tapi tidak menyatakan sikap.' : 'Paguyuban tidak hadir.'],
+        ['wulan', `Kelayakan armada: ${R.okA} dari ${R.n} angkot lulus pemeriksaan.`]];
+      if (R.hal) L.push(['narator', 'Kamu meletakkan halaman-halaman buku Bapak di meja. Pengacara Haji Sobari berhenti menulis.']);
+      if (R.exposed) L.push(['wulan', 'Satu hal lagi. Ada petugas kami yang menerima amplop atas nama perkara ini. Sudah kami periksa.'], ['narator', 'Seisi ruangan menoleh ke arahmu.']);
+      if (R.win) L.push(
+        ['wulan', 'Izin trayek 05 diperpanjang. Kuota dibagi ulang sesuai surat pembagian awal dan dukungan di lapangan.'],
+        ['narator', 'Haji Sobari berdiri lebih dulu. Di pintu dia berhenti.'],
+        ['sobari', 'Bapakmu pasti bangga. Saya tidak.'],
+        ['ujang', 'Darma… anakmu sudah pulang ke trayeknya.'],
+        ['narator', 'BERSAMBUNG — Bab 4: Ojol Masuk Kota.']);
+      else L.push(
+        ['wulan', `Izin trayek 05 diperpanjang dengan kuota. Pihakmu dapat ${G.B3.kuota} kursi. Sisanya ke Haji Sobari.`],
+        ['sobari', 'Tidak usah sedih. Bapakmu dulu dapat lebih sedikit.'],
+        ['ujang', 'Kita kalah di ruangan ini. Di jalan belum.'],
+        ['narator', s.flags.izin_ganti ? 'Sebagai ganti, Dishub memberimu izin trayek 09. Angkot yang lain dipindah ke sana.' : 'Angkot yang tidak dapat kursi dipindah ke trayekmu yang lain.'],
+        ['narator', 'BERSAMBUNG — Bab 4: Ojol Masuk Kota.']);
+      return L; },
+    done: s => { s.flags.tamat3 = s.day; } }
 ];
 const PERK = {
   ujang: s => [['ujang', 'Saya sudah tidak kuat narik seharian. Tapi mata saya masih awas.'], ['ujang', 'Tiap pagi saya cek oli, air radiator, sama angin ban semua mobil. Anggap saja saya mandor.'], ['narator', 'Mang Ujang jadi mandor. Semua angkotmu sekarang lebih awet.']],
@@ -602,7 +772,7 @@ const PERK = {
 G.CHAR = {
   narator: { name: '', c: '#5b6770' }, kamu: { name: 'Kamu', c: '#1f9d55' }, dimas: { name: 'Dimas', c: '#e2852b' },
   rina: { name: 'Teh Rina', c: '#c2418b' }, ujang: { name: 'Mang Ujang', c: '#7a5a2e' }, sobari: { name: 'Haji Sobari', c: '#2a6fdb' },
-  kohar: { name: 'Kohar', c: '#34507a' }, jajang: { name: 'Jajang', c: '#2f9c95' }, asep: { name: 'Asep', c: '#d8402f' },
+  kohar: { name: 'Kohar', c: '#34507a' }, wulan: { name: 'Bu Wulan', c: '#a35a1f' }, endang: { name: 'Pak Endang', c: '#4d6b3c' }, jajang: { name: 'Jajang', c: '#2f9c95' }, asep: { name: 'Asep', c: '#d8402f' },
   dadang: { name: 'Kang Dadang', c: '#6b7d2a' }, ucok: { name: 'Bang Ucok', c: '#8a4fd0' }, tini: { name: 'Bu Tini', c: '#d0577a' }
 };
 G.scenes = function (s, when) {
@@ -610,7 +780,7 @@ G.scenes = function (s, when) {
   for (const x of s.adhoc) if (x.when === when) out.push({ id: x.id, lines: x.lines });
   if (s.over) return out;
   for (const st of STORY) if (st.when === when && !s.seen[st.id] && st.test(s)) {
-    out.push({ id: st.id, lines: st.lines(s), choices: st.choices ? st.choices(s).map(c => ({ label: c.label, ok: c.ok })) : null });
+    out.push({ id: st.id, lines: st.lines(s), choices: st.choices ? st.choices(s).map(c => ({ label: c.label, ok: c.ok, why: c.why })) : null });
     if (out.length >= 2) break;
   }
   if (when === 'malam' && out.length < 2) for (const d of Object.values(s.drivers)) {
@@ -650,7 +820,17 @@ G.kabar = function (s, tomorrow) {
   if (tomorrow && !s.over) {
     const T = { 6: 'Penjaga warung kopi titip pesan: ada sopir tua yang menanyakan kamu.', 13: 'Laci dasbor Si Ijo berbunyi klotak-klotak sejak sore.', 16: 'Dimas dari tadi bolak-balik di depan kamarmu.', 17: 'Kata tukang parkir, ada sedan putih mondar-mandir di depan gang.', 24: 'Mang Ujang: “Besok malam ngopi. Ada yang belum saya ceritakan.”' };
     if (s.bab === 1 && T[day]) out.push(T[day]);
+    if (G.b3on(s)) {
+      const T3 = { 3: 'Pak Endang, ketua paguyuban, mengumpulkan sopir besok malam di warung terminal.', 9: 'Mang Ujang: “Besok malam jangan ke mana-mana. Ada yang mau ketemu.”', 15: 'Sedan putih parkir di depan gang dari sore. Mesinnya tidak dimatikan.', 22: 'Kata tukang parkir, ada pegawai Dishub yang naik-turun angkot di pasar.' };
+      if (T3[day - s.b3.start]) out.push(T3[day - s.b3.start]);
+    }
   }
+  if (G.b3on(s)) {
+    const left = s.b3.hearing - day;
+    out.push(left > 0 ? `Sidang izin trayek 05: ${left} hari lagi.` : (tomorrow ? 'Besok' : 'Hari ini') + ' sidang izin trayek 05 di Dishub.');
+    if (hasMod(s, 'biru')) out.push('Angkot biru membanjiri trayek 05. Penumpang dibagi tipis.');
+  }
+  if (hasMod(s, 'trayek_bapak')) out.push('Trayek 05 dibagi ulang. Penumpang pasar kembali ke angkotmu.');
   return out;
 };
 G.goals = function (s) {
@@ -662,9 +842,15 @@ G.goals = function (s) {
     if (due) g.push({ scope: `Hari ke-${due.day}`, text: `Cicilan ${G.fmt(due.amt)} ke Haji Sobari`, cur: clamp(s.money, 0, due.amt), max: due.amt, note: due.day - s.day > 0 ? `${due.day - s.day} hari lagi` : 'Malam ini' });
     if (s.seen.dimas1 && !s.flags.semester) g.push({ scope: 'Hari ke-16', text: 'Semesteran Dimas Rp 700 rb', cur: clamp(s.money, 0, 700), max: 700, note: s.day <= 16 ? `${16 - s.day} hari lagi` : '' });
     g.push({ scope: 'Bab 1', text: 'Lunasi utang Bapak', cur: 4500 - Math.min(4500, G.debtLeft(s)), max: 4500, note: `Sisa ${G.fmt(G.debtLeft(s))}` });
+  } else if (G.b3on(s)) {
+    const sc = G.sidang(s), left = s.b3.hearing - s.day;
+    g.push({ scope: `Hari ke-${s.b3.hearing}`, text: 'Menangkan sidang izin trayek 05', cur: sc.total, max: G.B3.win, note: `Skor ${sc.total}, butuh ${G.B3.win} · ${left > 0 ? left + ' hari lagi' : 'malam ini'}` });
+    g.push({ scope: 'Petisi', text: 'Tanda tangan penumpang', cur: s.b3.petisi, max: G.B3.target, note: `${s.b3.petisi} dari ${G.B3.target}. Hanya angkot di trayek 05 yang mengumpulkan.` });
+    g.push({ scope: 'Armada', text: 'Lulus uji KIR, kondisi layak', cur: sc.okA, max: Math.max(1, sc.n), note: `${sc.okA} dari ${sc.n} angkot` });
+    g.push({ scope: 'Paguyuban', text: 'Nama baik 70', cur: Math.min(70, s.rep), max: 70, note: s.rep >= 70 ? 'Dukungan penuh' : s.rep >= 55 ? 'Hadir tapi diam' : 'Tidak mendukung' });
   } else {
-    if (s.fleet.length < 5) g.push({ scope: 'Berikutnya', text: `Beli angkot ke-${s.fleet.length + 1}`, cur: clamp(s.money, 0, G.DEALER.tua.price), max: G.DEALER.tua.price, note: s.flags.beli_titip ? `Kredit mulai ${G.fmt(G.DEALER.baru.price)}` : 'Ada titipan di Teh Rina, DP Rp 300 rb' });
-    g.push({ scope: 'Bab 2', text: 'Punya 5 angkot', cur: Math.min(5, s.fleet.length), max: 5, note: `${s.fleet.length} dari 5` });
+    if (s.fleet.length < (s.bab >= 3 ? G.MAX_FLEET : 5)) g.push({ scope: 'Berikutnya', text: `Beli angkot ke-${s.fleet.length + 1}`, cur: clamp(s.money, 0, G.DEALER.tua.price), max: G.DEALER.tua.price, note: s.flags.beli_titip ? `Kredit mulai ${G.fmt(G.DEALER.baru.price)}` : 'Ada titipan di Teh Rina, DP Rp 300 rb' });
+    if (s.bab === 2) g.push({ scope: 'Bab 2', text: 'Punya 5 angkot', cur: Math.min(5, s.fleet.length), max: 5, note: `${s.fleet.length} dari 5` });
   }
   return g;
 };

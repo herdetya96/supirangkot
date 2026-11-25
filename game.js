@@ -340,7 +340,7 @@ G.SELF_MODES = {
 };
 /* ---------- nyetir sendiri (mini-game) ----------
    Mesin hanya menyiapkan isi jalan (spec) dan mengubah hasilnya jadi uang. Fisika dan gambar ada di drive.js. */
-G.DRIVE = { dur: 60, par: 13.5, spawn: 24, seats: 12, place: 14000, vMax: 340 };
+G.DRIVE = { dur: 60, par: 12.5, spawn: 24, seats: 12, place: 14000, vMax: 340 };
 G.driveSpec = function (s, sh) {
   const a = s.fleet.find(x => x.driver === 'self' && !x.off); if (!a) return null;
   const Rt = G.ROUTES[a.route], P = s.today.per[a.id], D = G.DRIVE;
@@ -351,7 +351,11 @@ G.driveSpec = function (s, sh) {
   while (left > 0) { const k = Math.min(left, 1 + Math.floor(rng(s) * 3)); left -= k; groups.push({ d: 500 + rng(s) * (D.place - 500), n: k }); }
   groups.sort((x, y) => x.d - y.d);
   const traffic = [], nm = sh === 1 ? 14 : 22;
-  for (let i = 0; i < nm; i++) traffic.push({ d: 300 + rng(s) * D.place * 0.9, lane: rng(s) < 0.2 ? 0 : rng(s) < 0.55 ? 1 : 2, v: 140 + rng(s) * 120 });
+  for (let i = 0; i < nm; i++) {
+    const roll = rng(s), kind = roll < 0.5 ? 'motor' : roll < 0.78 ? 'mobil' : roll < 0.9 ? 'pikap' : 'truk';
+    const v = kind === 'truk' ? 110 + rng(s) * 50 : kind === 'motor' ? 140 + rng(s) * 120 : 160 + rng(s) * 90;
+    traffic.push({ d: 300 + rng(s) * D.place * 0.9, lane: kind === 'truk' ? 2 : rng(s) < 0.2 ? 0 : rng(s) < 0.55 ? 1 : 2, v, kind });
+  }
   const biru = [], nb = hasMod(s, 'biru') ? 7 : s.bab >= 2 ? 4 : 2;
   for (let i = 0; i < nb; i++) biru.push({ d: 400 + rng(s) * D.place * 0.8, v: 150 + rng(s) * 60 });
   const wet = s.wx.today === 'hujan', potholes = [];
@@ -369,12 +373,13 @@ function driveShift(s, a, sh, D, res, mandor) {
   s.stamina = clamp(s.stamina - 20 - (D.avgV > 0.85 ? 6 : 0), 0, 100);
   const frac = Math.min(1, D.t / G.DRIVE.dur);
   const gross = R10(Math.max(0, D.fares)), fuel = R10(fuelOf(s, a) * (0.6 + 0.5 * D.avgV) * frac);
-  cond(a, -1.1 * Rt.wear * (0.6 + 0.6 * D.avgV) * mandor - 3 * D.hits - 1 * D.potholes);
+  cond(a, -1.1 * Rt.wear * (0.6 + 0.6 * D.avgV) * mandor - 3 * D.hits - 1 * ((D.potholes || 0) + (D.skids || 0)));
   const n = [`${D.riders} penumpang.`];
   if (D.mogok) { cond(a, 8); cash(s, -150, 'Perbaikan'); res.down = true; n.push(`${a.name} mogok, derek Rp 150 rb.`); }
   if (D.severe) { cash(s, -50 * D.severe, 'Perbaikan'); rep(s, -D.severe); n.push(`Nabrak ${D.severe}×, ganti rugi ${G.fmt(50 * D.severe)}.`); }
   else if (D.hits) n.push(`Nyerempet ${D.hits}×.`);
-  if (D.tilang) { cash(s, -75 * D.tilang, 'Surat & denda'); n.push(`Ditilang ${G.fmt(75 * D.tilang)}.`); }
+  if (D.skids) n.push(`Kebablasan di tikungan ${D.skids}×.`);
+  if (D.tilang) { cash(s, -75 * D.tilang, 'Surat & denda'); n.push(D.merah ? `Terobos lampu merah, ditilang ${G.fmt(75 * D.tilang)}.` : `Ditilang ${G.fmt(75 * D.tilang)}.`); }
   if (D.missed) { rep(s, -0.4 * D.missed); n.push(`${D.missed} penumpang kelewatan turun.`); }
   if (D.stolen) n.push(`${D.stolen} diserobot angkot biru.`);
   res.gross = gross; res.fuel = fuel; res.note = n.join(' '); res.drive = D;

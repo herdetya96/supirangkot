@@ -34,21 +34,34 @@ Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik 
 ## Mini-game nyetir
 
 Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
-60 detik. Menepi ke lajur kiri dan berhenti di kotak kuning untuk menaikkan penumpang. Penumpang teriak "Kiri!" setelah
-900–3100 unit; berhenti di pinggir untuk menurunkan. Ongkos dibayar waktu turun; yang kelewatan tidak bayar.
-Tarif per penumpang = pendapatan rit dasar trayek × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (13,5).
-Jumlah penumpang = 24 × permintaan, jadi hari ramai terasa ramai. Angkot biru menyerobot satu rombongan
-(dua di Bab 3). Tenaga −20 per rit (−26 kalau rata-rata laju di atas 85%).
+60 detik di kota Cibening, tampak atas, kamera ikut berputar di tikungan dan menjauh saat ngebut.
 
-Hasil `drivebot.js` (200 rit), dibanding pendapatan mode "Narik biasa":
+- Peta: `buildWorld(trayek)` membuat rute tetap per trayek dari seed nomor trayek (sama setiap main):
+  ruas lurus dan tikungan 90° bergantian, 10–12 perempatan (sekitar 60% berlampu merah), satu sungai dengan jembatan,
+  satu perlintasan kereta, dan lima landmark (05: Terminal, Masjid, SD, SPBU, Pasar Baru; 09 berakhir di Kampus;
+  12 dari Pasar Baru ke Stasiun dan Griya Asri). Bangunan pinggir jalan, tiang listrik, pejalan, dan kampung di
+  belakang dibuat dari hash dan dicek tidak menimpa jalan (`Wd.blocked`).
+- Fisika tetap dua sumbu: `d` sepanjang rute, `x` lateral. Gambar memetakan (d, x) ke dunia lewat `Wd.at(d)`.
+- Penumpang: menepi ke kotak kuning dan berhenti untuk naik; berhenti di pinggir waktu "Kiri!". Ongkos dibayar saat turun,
+  yang kelewatan tidak bayar.
+- Lampu merah: siklus 16 dtk (hijau 11, kuning 1,5, merah 3,5). Palang kereta: 22 dtk, tertutup 6,5 dtk. Menerobos = tilang
+  Rp 75 rb. Saat merah ada mobil melintas, dan saat palang tertutup kereta lewat; ditabrak = ganti rugi.
+- Tikungan: di atas 235 (90% saat hujan) angkot terlempar ke luar; menyentuh tepi = "kebablasan" (kondisi −1, laju turun).
+- Kendaraan searah (motor, mobil, pikap, truk, angkot biru) ikut berhenti di lampu merah dan di belakang kendaraan lain.
+  Kendaraan arah berlawanan hanya hiasan.
+- Tarif per penumpang = pendapatan rit dasar × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (12,5).
+  Jumlah penumpang = 24 × permintaan. Angkot biru menyerobot satu rombongan (dua di Bab 3). Tenaga −20 per rit.
 
-| Bot | Ongkos | Naik | Kelewatan | Tilang |
-|---|---|---|---|---|
-| Rapi (berhenti untuk "kiri", hindari lubang, pelan dekat polisi) | 1,13× | 16 | 0,1 | 0 |
-| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,82× | 18 | 6,8 | 0,4 |
+Hasil `drivebot.js` (200 rit, tiga trayek), dibanding pendapatan mode "Narik biasa":
 
-Mode "Ngebut" otomatis tetap 1,3×, tapi tenaga −30 dan risiko tilang dan serempet. Bot belum pernah diuji melawan
-tangan manusia di HP; kemungkinan manusia di awal lebih buruk dari bot rapi.
+| Bot | Ongkos | Naik | Serempet | Kebablasan | Kelewatan | Tilang |
+|---|---|---|---|---|---|---|
+| Rapi (patuh lampu, pelan di tikungan, berhenti untuk "kiri") | 1,10× | 13,5 | 0,9 | 0 | 0 | 0 |
+| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,76× | 15,2 | 3,1 | 5,1 | 5,8 | 0,4 |
+| Nekat (rapi tapi terobos lampu, ngebut di tikungan) | 1,17× kotor | 14,6 | 1,7 | 4,6 | 0,3 | 1,0 |
+
+Nekat dapat ongkos kotor lebih besar, tapi tilang (±Rp 75 rb) dan ganti rugi tabrakan membuatnya rugi bersih.
+Bot belum pernah diuji melawan tangan manusia di HP.
 
 ## Pilar desain
 

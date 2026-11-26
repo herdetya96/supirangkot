@@ -147,10 +147,25 @@ class Sim {
     this.skid = k && over > 0 ? Math.sign(k) * over * 3.2 : 0;
     const grip = (S.wet ? 0.85 : 1) * (this.skid ? 0.55 : 1);
     if (inp.steer != null) {
-      // setir analog: geser ke samping sebanding laju, angkot diam tidak bisa geser
-      const st = clamp(inp.steer, -1, 1) + (S.wobble ? Math.sin(this.t * 1.7) * 0.25 * S.wobble : 0);
-      this.steer = st; this.tx = this.x + st * 90;
-      this.x += st * LAT * grip * clamp(this.v / 110, 0, 1) * dt + this.skid * dt;
+      // setir dengan bantuan lajur: ditahan = bergeser, dilepas = meluncur ke tengah lajur terdekat searah belokan terakhir.
+      // Sentuhan singkat cukup untuk pindah satu lajur. Angkot diam tidak bisa bergeser.
+      const raw = clamp(inp.steer, -1, 1), wob = S.wobble ? Math.sin(this.t * 1.7) * 0.25 * S.wobble : 0;
+      const f = this.v < 3 ? 0 : clamp(0.4 + this.v / 170, 0, 1);
+      const near = x => LANES.reduce((b, l, i) => Math.abs(l - x) < Math.abs(LANES[b] - x) ? i : b, 0);
+      if (Math.abs(raw) > 0.12) {
+        // awal sentuhan: catat lajur asal, supaya sentuhan sesingkat apa pun tetap pindah minimal satu lajur
+        if (this.lane != null || this.press == null || Math.sign(raw) !== this.lastDir) this.press = this.lane != null ? this.lane : near(this.x);
+        this.x += (raw + wob) * LAT * grip * f * dt; this.lane = null; this.lastDir = Math.sign(raw); this.tx = this.x + raw * 90;
+      } else {
+        if (this.lane == null) {
+          let ln = near(this.x + (this.lastDir || 0) * 16);
+          if (this.press != null && f > 0) ln = this.lastDir < 0 ? Math.min(ln, Math.max(0, this.press - 1)) : Math.max(ln, Math.min(LANES.length - 1, this.press + 1));
+          this.lane = ln; this.press = null;
+        }
+        const dx = LANES[this.lane] - this.x, mv = LAT * 0.75 * grip * f * dt;
+        this.x += (Math.abs(dx) < mv ? dx : Math.sign(dx) * mv) + wob * 40 * f * dt; this.tx = LANES[this.lane];
+      }
+      this.steer = raw; this.x += this.skid * dt;
     } else {
       if (inp.tx != null) this.tx = inp.tx;
       let tx = clamp(this.tx, ROAD_L + PW / 2, ROAD_R - PW / 2);
@@ -715,7 +730,7 @@ function mount(host, spec, opts, done) {
       <div class="ny-lapis" data-ny="intro"><div class="ny-kartu"><span class="eyebrow">Rit ${esc(opts.shiftName)} · Trayek ${esc(spec.route)}</span><h2>${esc(stops[0])} → ${esc(stops[stops.length - 1])}</h2>
         <p class="ny-rute">${stops.map(esc).join(' · ')}</p>
         <ul><li>Tahan <b>GAS</b> untuk jalan, <b>REM</b> untuk berhenti. Lepas gas, angkot melambat sendiri.</li>
-        <li>Putar <b>setir</b> dengan jempol kiri. Angkot hanya bisa pindah lajur kalau sedang jalan. Tengah setir = klakson.</li>
+        <li>Sentuh sisi kiri atau kanan <b>setir</b> untuk pindah lajur. Lepas, angkot lurus sendiri di tengah lajur. Sentuhan singkat = satu lajur. Angkot harus jalan dulu.</li>
         <li>Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, H klakson, C kamera.</li>
         <li>Orang melambai di trotoar: <b>menepi ke kotak kuning dan berhenti</b>.</li><li>Ada yang teriak <b>“Kiri!”</b>: menepi dan berhenti. Ongkos dibayar waktu turun. Kelewatan, dia tidak mau bayar.</li>
         <li>Patuhi <b>lampu merah</b> dan <b>palang kereta</b>. Pelan di tikungan, nanti kebablasan.</li>
@@ -729,9 +744,10 @@ function mount(host, spec, opts, done) {
         <svg viewBox="-60 -60 120 120" aria-hidden="true"><g class="setir-roda">
           <circle r="52" fill="none" stroke="#14181c" stroke-width="13"/><circle r="52" fill="none" stroke="#3a434b" stroke-width="7"/>
           <path d="M-46 6 L-16 10 M46 6 L16 10 M0 18 L0 48" stroke="#2a3138" stroke-width="11" stroke-linecap="round"/>
-          <circle r="19" fill="#20262c" stroke="#14181c" stroke-width="3"/><text y="5" text-anchor="middle" font-size="12" font-weight="800" fill="#ffd400" font-family="sans-serif">TIN</text>
+          <circle r="19" fill="#20262c" stroke="#14181c" stroke-width="3"/><circle r="7" fill="#3a434b"/>
           <rect x="-5" y="-58" width="10" height="9" rx="2" fill="#ffd400"/></g></svg>
       </div>
+      <button class="klakson" data-ny="tin" aria-label="Klakson">TIN</button>
       <div class="pedal-grup"><button class="rem" data-ny="rem" aria-label="Rem">REM</button><button class="gaspol" data-ny="gas" aria-label="Gas">GAS</button></div>
     </div></div>`;
   const root2 = host.firstElementChild, cv = root2.querySelector('canvas.ny-hud'), box = root2.querySelector('.ny-kanvas'), c = cv.getContext('2d');
@@ -792,17 +808,17 @@ function mount(host, spec, opts, done) {
   // setir: posisi jempol di setir menentukan putaran; tengah setir = klakson
   const setir = root2.querySelector('.setir'), wheelEl = root2.querySelector('.setir-roda'), goBtn = root2.querySelector('[data-ny="go"]');
   let wheelId = null;
-  const wheelAt = e => { const r = setir.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2); return clamp(dx / (r.width * 0.36), -1, 1); };
+  const wheelAt = e => { const r = setir.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2); return Math.abs(dx) < r.width * 0.06 ? 0 : clamp(dx / (r.width * 0.3), -1, 1); };
   setir.addEventListener('pointerdown', e => {
-    const r = setir.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     e.preventDefault();
-    if (Math.hypot(dx, dy) < r.width * 0.17) { klakson(); return; }
     wheelId = e.pointerId; setir.setPointerCapture(e.pointerId); setir.classList.add('on'); wheel = wheelAt(e);
   });
   setir.addEventListener('pointermove', e => { if (e.pointerId === wheelId) wheel = wheelAt(e); });
   const wheelUp = e => { if (e.pointerId !== wheelId) return; wheelId = null; wheel = 0; setir.classList.remove('on'); };
   setir.addEventListener('pointerup', wheelUp); setir.addEventListener('pointercancel', wheelUp); setir.addEventListener('lostpointercapture', wheelUp);
-  function klakson() { if (running) S.say('Tin tin!'); setir.classList.add('tin'); setTimeout(() => setir.classList.remove('tin'), 180); }
+  const tinBtn = root2.querySelector('[data-ny="tin"]');
+  function klakson() { if (running) S.say('Tin tin!'); tinBtn.classList.add('on'); setTimeout(() => tinBtn.classList.remove('on'), 180); }
+  tinBtn.addEventListener('pointerdown', e => { e.preventDefault(); klakson(); });
   const pedal = (el, set) => {
     el.addEventListener('pointerdown', e => { set(true); el.classList.add('on'); el.setPointerCapture(e.pointerId); e.preventDefault(); });
     const off = () => { set(false); el.classList.remove('on'); };

@@ -75,7 +75,7 @@ class Asset:
             ob.select_set(ob in objs)
         path = os.path.join(OUT, self.name + '.glb')
         kw = dict(filepath=path, export_format='GLB', use_selection=True, export_yup=True, export_apply=False,
-                  export_texcoords=False, export_normals=True, export_materials='NONE', export_animations=False)
+                  export_texcoords=False, export_normals=False, export_materials='NONE', export_animations=False)
         try:
             bpy.ops.export_scene.gltf(export_vertex_color='ACTIVE', **kw)
         except TypeError:
@@ -137,6 +137,17 @@ def plane(c, sx, sy):
     return fn
 
 
+def arch(c, r, side, seg=12):
+    """Lengkung rumah roda: setengah lingkaran tipis menghadap ke samping (side -1 kiri, 1 kanan)."""
+    def fn(b):
+        vs = [b.verts.new((c[0], c[1] + r * math.cos(math.pi * k / seg), c[2] + r * math.sin(math.pi * k / seg))) for k in range(seg + 1)]
+        f = b.faces.new(vs)
+        f.normal_update()
+        if f.normal.x * side < 0:
+            f.normal_flip()
+    return fn
+
+
 def wheel(A, c, r, w, rim=VELG, hub=KROM, seg=16):
     side = 1 if c[0] >= 0 else -1
     A.add(BAN, cyl(c, r, w, 'x', seg))
@@ -150,56 +161,134 @@ def mirror_x(fn_maker, *args, **kw):
 
 
 # ---------- kendaraan (depan = +Y) ----------
-def angkot():
-    A = Asset('angkot')
+# ---------- teks 3D (huruf Blender diubah jadi mesh, ditempel di permukaan) ----------
+# sumbu teks (kanan, atas, normal) untuk tiap muka benda yang menghadap +Y
+FACE = {
+    'kiri': ((0, -1, 0), (0, 0, 1), (-1, 0, 0)),
+    'kanan': ((0, 1, 0), (0, 0, 1), (1, 0, 0)),
+    'depan': ((-1, 0, 0), (0, 0, 1), (0, 1, 0)),
+    'belakang': ((1, 0, 0), (0, 0, 1), (0, -1, 0)),
+    'xdepan': ((0, 1, 0), (0, 0, 1), (1, 0, 0)),     # bangunan yang menghadap +X
+}
+
+
+def text(s, size, c, face, bold=True):
+    def fn(b):
+        cu = bpy.data.curves.new('t', 'FONT')
+        cu.body, cu.size, cu.align_x, cu.align_y = s, size, 'CENTER', 'CENTER'
+        cu.resolution_u = 2                      # lengkung huruf kasar saja: hemat segitiga
+        ob = bpy.data.objects.new('t', cu)
+        bpy.context.scene.collection.objects.link(ob)
+        dg = bpy.context.evaluated_depsgraph_get()
+        me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+        bpy.data.objects.remove(ob)
+        bpy.data.curves.remove(cu)
+        tmp = bmesh.new()
+        tmp.from_mesh(me)
+        bpy.data.meshes.remove(me)
+        bmesh.ops.triangulate(tmp, faces=tmp.faces[:])
+        xa, ya, na = (Vector(v) for v in FACE[face])
+        M = Matrix(((xa.x, ya.x, na.x, c[0]), (xa.y, ya.y, na.y, c[1]), (xa.z, ya.z, na.z, c[2]), (0, 0, 0, 1)))
+        vm = {}
+        for v in tmp.verts:
+            vm[v] = b.verts.new(M @ v.co)
+        for f in tmp.faces:
+            try:
+                nf = b.faces.new([vm[v] for v in f.verts])
+                nf.normal_update()
+                if nf.normal.dot(na) < 0:
+                    nf.normal_flip()
+            except ValueError:
+                pass
+        tmp.free()
+    return fn
+
+
+TRAYEK = {'05': 'TERMINAL - PASAR BARU', '09': 'TERMINAL - KAMPUS', '12': 'PASAR BARU - GRIYA ASRI'}
+
+
+def angkot(no='05', name='angkot'):
+    """Angkot gaya mikrobus: kabin penumpang berongga dengan pintu geser terbuka di kiri, jok saling berhadapan."""
+    A = Asset(name)
     W, L = 1.76, 3.36
+    hx = W / 2
     A.add(BAYANG, plane((0, 0, 0.012), W + 0.22, L + 0.26))
     for sx in (-1, 1):
         for sy in (-1, 1):
             wheel(A, (sx * 0.80, sy * 1.08, 0.30), 0.30, 0.20)
-            A.add(GELAP, cube((sx * 0.881, sy * 1.08, 0.48), (0.02, 0.76, 0.40)))
-    A.add(CAT, cube((0, 0, 0.74), (W, L, 0.84), bevel=0.05, seg=2))
+            for k in range(5):
+                a = k / 5 * math.tau
+                A.add(KROM, cyl((sx * 0.913, sy * 1.08 + 0.08 * math.cos(a), 0.30 + 0.08 * math.sin(a)), 0.014, 0.01, 'x', 6))
+            A.add(hexc('15191c'), arch((sx * (hx + 0.005), sy * 1.08, 0.30), 0.40, sx))
+    # rangka bawah dan lantai
+    A.add(GELAP, cube((0, 0, 0.27), (W - 0.2, L - 0.3, 0.12)))
+    # kabin depan (pengemudi), padat, kaca depan miring
     def slope(v):
         if v.z > 0 and v.y > 0:
-            v.y -= 0.32
-    A.add(CAT, cube((0, -0.16, 1.53), (W - 0.04, L - 0.32, 0.74), bevel=0.07, seg=2, shape=slope))
-    ang = math.atan2(0.32, 0.74)
-    A.add(KACA, cube((0, 1.226, 1.52), (1.50, 0.03, 0.74), rot=(ang, 0, 0)))
+            v.y -= 0.34
+    A.add(CAT, cube((0, 0.92, 0.74), (W, 1.52, 0.84), bevel=0.05, seg=2))
+    A.add(CAT, cube((0, 0.82, 1.52), (W, 1.32, 0.72), bevel=0.06, seg=2, shape=slope))
+    ang = math.atan2(0.34, 0.72)
+    A.add(KACA, cube((0, 1.31, 1.50), (1.54, 0.03, 0.70), rot=(ang, 0, 0)))
     for sx in (-1, 1):
-        for y0, y1 in ((-1.55, -0.75), (-0.65, 0.15), (0.25, 0.92)):
-            if sx < 0 and y0 == -0.65:
-                A.add(hexc('15191c'), cube((sx * 0.876, (y0 + y1) / 2, 1.10), (0.03, y1 - y0, 1.36)))   # pintu geser terbuka
-                A.add(hexc('6b3b2a'), cube((sx * 0.60, (y0 + y1) / 2, 0.92), (0.40, 0.75, 0.12)))        # jok di dalam
-                continue
-            A.add(KACA, cube((sx * 0.876, (y0 + y1) / 2, 1.52), (0.03, y1 - y0, 0.50)))
-        A.add(PUTIH, cube((sx * 0.888, -0.02, 1.01), (0.012, 3.22, 0.07)))
-        A.add(hexc('f2c230'), cube((sx * 0.888, -0.02, 0.91), (0.012, 3.22, 0.04)))
-        A.add(GELAP, cube((sx * 0.93, 1.12, 1.33), (0.12, 0.03, 0.03)))
-        A.add(GELAP, cube((sx * 0.99, 1.12, 1.37), (0.04, 0.10, 0.17), bevel=0.01))
-        A.add(LAMPU, cube((sx * 0.62, 1.687, 0.72), (0.28, 0.03, 0.18), bevel=0.01))
-        A.add(SEIN, cube((sx * 0.83, 1.687, 0.72), (0.08, 0.03, 0.12)))
-        A.add(REMC, cube((sx * 0.76, -1.687, 0.78), (0.16, 0.03, 0.36), bevel=0.01))
+        A.add(GELAP, cube((sx * 0.30, 1.38, 1.24), (0.42, 0.015, 0.015), rot=(ang, 0, sx * 0.2)))   # wiper
+        A.add(KACA, cube((sx * (hx + 0.002), 0.62, 1.50), (0.02, 0.62, 0.52)))
+        A.add(GELAP, cube((sx * (hx + 0.004), 0.25, 0.95), (0.008, 0.012, 1.0)))               # garis pintu
+    # kabin penumpang berongga (y -1.68..0.16)
+    y0, y1 = -1.68, 0.16
+    yc, yl = (y0 + y1) / 2, y1 - y0
+    A.add(CAT, cube((hx - 0.02, yc, 1.10), (0.04, yl, 1.56)))                                   # dinding kanan
+    A.add(CAT, cube((-hx + 0.02, -1.165, 1.10), (0.04, 1.03, 1.56)))                             # kiri, di belakang pintu
+    A.add(CAT, cube((-hx + 0.02, -0.25, 1.86), (0.04, 0.80, 0.08)))                              # di atas pintu
+    A.add(CAT, cube((0, y0 + 0.02, 1.10), (W, 0.04, 1.56)))                                      # dinding belakang
+    A.add(CAT, cube((0, yc - 0.01, 1.89), (W, yl + 0.02, 0.10), bevel=0.04, seg=2))             # atap
+    A.add(hexc('6b6f72'), cube((0, yc, 0.42), (W - 0.08, yl, 0.04)))                            # lantai
+    A.add(hexc('ece6d6'), cube((0, yc, 1.82), (W - 0.1, yl - 0.04, 0.03)))                       # plafon
+    for sx in (-1, 1):
+        A.add(hexc('ece6d6'), cube((sx * (hx - 0.045), yc, 1.55), (0.01, yl - 0.04, 0.5)))       # pelapis dinding dalam
+        A.add(hexc('8a3b2a'), cube((sx * 0.60, -0.72, 0.80), (0.42, 1.70, 0.10), bevel=0.02))      # jok
+        A.add(hexc('7a3326'), cube((sx * 0.80, -0.72, 1.06), (0.06, 1.70, 0.46), bevel=0.02))      # sandaran
+        A.add(hexc('4a4a4a'), cube((sx * 0.60, -0.72, 0.62), (0.36, 1.66, 0.36)))
+        A.add(KROM, cyl((sx * 0.45, -0.72, 1.76), 0.012, 1.7, 'y', 6))                           # pegangan atap
+    A.add(KROM, cyl((-0.74, 0.08, 1.12), 0.018, 1.40, 'z', 8))                                   # tiang pegangan pintu
+    A.add(KROM, cube((-hx - 0.05, -0.25, 0.34), (0.14, 0.78, 0.04)))                             # pijakan pintu
+    # kaca samping dan belakang
+    for y0w, y1w in ((-1.58, -0.72), ):
+        A.add(KACA, cube((-hx - 0.002, (y0w + y1w) / 2, 1.50), (0.02, y1w - y0w, 0.52)))
+    for y0w, y1w in ((-1.58, -0.98), (-0.90, -0.30), (-0.22, 0.12)):
+        A.add(KACA, cube((hx + 0.002, (y0w + y1w) / 2, 1.50), (0.02, y1w - y0w, 0.52)))
+    A.add(KACA, cube((0, -1.702, 1.50), (1.30, 0.02, 0.52)))
+    # list dan tulisan samping
+    for sx, face in ((-1, 'kiri'), (1, 'kanan')):
+        A.add(PUTIH, cube((sx * (hx + 0.006), -0.06, 1.02), (0.01, 3.24, 0.07)))
+        A.add(hexc('f2c230'), cube((sx * (hx + 0.006), -0.06, 0.93), (0.01, 3.24, 0.035)))
+        A.add(PUTIH, text(no, 0.34, (sx * (hx + 0.012), 0.62 if sx < 0 else 0.62, 0.62), face))
+        A.add(PUTIH, text('TRAYEK', 0.07, (sx * (hx + 0.012), 0.62, 0.84), face))
+        A.add(PUTIH, text(TRAYEK[no], 0.075, (sx * (hx + 0.012), -1.10, 1.18 if sx > 0 else 0.62), face))
+        A.add(GELAP, cube((sx * 0.94, 1.18, 1.32), (0.14, 0.03, 0.03)))
+        A.add(GELAP, cube((sx * 1.00, 1.18, 1.38), (0.04, 0.10, 0.18), bevel=0.01))
+        A.add(REMC, cube((sx * 0.76, -1.705, 0.80), (0.16, 0.03, 0.34), bevel=0.01))
         A.add(BAN, cube((sx * 0.80, -1.44, 0.24), (0.22, 0.02, 0.24)))
-        A.add(GELAP, cyl((sx * 0.25, -1.725, 1.45), 0.016, 0.9, 'z', 6))
-    A.add(KACA, cube((0, -1.686, 1.52), (1.36, 0.03, 0.52)))
-    A.add(KROM, cube((0, 1.70, 0.42), (1.72, 0.12, 0.18), bevel=0.03, seg=2))
-    A.add(KROM, cube((0, -1.70, 0.42), (1.72, 0.12, 0.18), bevel=0.03, seg=2))
-    A.add(GELAP, cube((0, 1.686, 0.70), (0.96, 0.03, 0.26)))
-    for z in (0.64, 0.70, 0.76):
-        A.add(KROM, cube((0, 1.70, z), (0.92, 0.012, 0.018)))
-    for y in (1.775, -1.775):
-        A.add(hexc('161616'), cube((0, y, 0.43), (0.48, 0.02, 0.13)))
-        A.add(PUTIH, cube((0, y + (0.011 if y > 0 else -0.011), 0.43), (0.40, 0.004, 0.02)))
-    for z in (1.15, 1.35, 1.55, 1.75):
-        A.add(GELAP, cyl((0, -1.725, z), 0.012, 0.5, 'x', 6))
-    A.add(GELAP, cube((0, 1.05, 2.02), (1.0, 0.08, 0.27), bevel=0.01))           # papan trayek
-    A.add(PUTIH, cube((0, 1.095, 2.02), (0.92, 0.02, 0.20)))
+    # muka depan
+    A.add(GELAP, cube((0, 1.686, 0.74), (0.86, 0.03, 0.26)))
+    for z in (0.66, 0.72, 0.78):
+        A.add(KROM, cube((0, 1.70, z), (0.82, 0.012, 0.016)))
     for sx in (-1, 1):
-        A.add(GELAP, cyl((sx * 0.68, -0.35, 2.0), 0.025, 2.45, 'y', 8))
-        for y in (-1.5, 0.75):
-            A.add(GELAP, cube((sx * 0.68, y, 1.95), (0.05, 0.05, 0.1)))
-    for y in (-1.35, -0.6, 0.15, 0.75):
-        A.add(GELAP, cyl((0, y, 2.0), 0.02, 1.36, 'x', 6))
+        A.add(KROM, cube((sx * 0.62, 1.69, 0.76), (0.32, 0.03, 0.22), bevel=0.01))
+        A.add(LAMPU, cube((sx * 0.62, 1.70, 0.76), (0.27, 0.02, 0.17)))
+        A.add(SEIN, cube((sx * 0.62, 1.69, 0.56), (0.24, 0.03, 0.07)))
+    A.add(hexc('3a3f44'), cube((0, 1.72, 0.40), (1.74, 0.12, 0.20), bevel=0.03, seg=2))
+    A.add(hexc('3a3f44'), cube((0, -1.72, 0.40), (1.74, 0.12, 0.20), bevel=0.03, seg=2))
+    plat = hexc('f2c230')
+    for y, face in ((1.785, 'depan'), (-1.785, 'belakang')):
+        A.add(plat, cube((0, y, 0.44), (0.50, 0.02, 0.13)))
+        A.add(hexc('161616'), text('F 1705 AK', 0.085, (0, y + (0.012 if y > 0 else -0.012), 0.44), face))
+    # papan trayek di atap
+    A.add(GELAP, cube((0, 1.05, 2.04), (1.12, 0.08, 0.28), bevel=0.01))
+    A.add(PUTIH, cube((0, 1.10, 2.04), (1.06, 0.02, 0.22)))
+    A.add(hexc('1f6f3f'), text(no + ' ' + TRAYEK[no], 0.062 if len(TRAYEK[no]) > 20 else 0.07, (0, 1.112, 2.04), 'depan'))
+    for sx in (-1, 1):
+        A.add(GELAP, cube((sx * 0.45, 1.05, 1.93), (0.04, 0.04, 0.1)))
     A.export()
 
 
@@ -619,9 +708,471 @@ def warung():
     A.export()
 
 
+# ---------- bentuk tambahan untuk bangunan ----------
+def _face_out(b, vs, out):
+    f = b.faces.new(vs)
+    f.normal_update()
+    if f.normal.dot(Vector(out)) < 0:
+        f.normal_flip()
+    return f
+
+
+def gable(x0, x1, y0, y1, z0, z1, ridge='y', ends=True):
+    """Atap pelana. ridge='y': bubungan searah Y."""
+    def fn(b):
+        v = lambda x, y, z: b.verts.new((x, y, z))
+        if ridge == 'y':
+            xm = (x0 + x1) / 2
+            _face_out(b, [v(x0, y0, z0), v(x0, y1, z0), v(xm, y1, z1), v(xm, y0, z1)], (-1, 0, 1))
+            _face_out(b, [v(x1, y0, z0), v(x1, y1, z0), v(xm, y1, z1), v(xm, y0, z1)], (1, 0, 1))
+            if ends:
+                _face_out(b, [v(x0, y0, z0), v(x1, y0, z0), v(xm, y0, z1)], (0, -1, 0))
+                _face_out(b, [v(x0, y1, z0), v(x1, y1, z0), v(xm, y1, z1)], (0, 1, 0))
+        else:
+            ym = (y0 + y1) / 2
+            _face_out(b, [v(x0, y0, z0), v(x1, y0, z0), v(x1, ym, z1), v(x0, ym, z1)], (0, -1, 1))
+            _face_out(b, [v(x0, y1, z0), v(x1, y1, z0), v(x1, ym, z1), v(x0, ym, z1)], (0, 1, 1))
+            if ends:
+                _face_out(b, [v(x0, y0, z0), v(x0, y1, z0), v(x0, ym, z1)], (-1, 0, 0))
+                _face_out(b, [v(x1, y0, z0), v(x1, y1, z0), v(x1, ym, z1)], (1, 0, 0))
+    return fn
+
+
+def pyramid(cx, cy, z0, w, l, h, top=0.0):
+    """Atap perisai / limas (joglo): alas w×l, puncak selebar top."""
+    def fn(b):
+        before = set(b.verts)
+        bmesh.ops.create_cone(b, cap_ends=True, cap_tris=False, segments=4, radius1=1.0, radius2=max(top, 0.0001), depth=h)
+        new = [v for v in b.verts if v not in before]
+        R = Matrix.Rotation(math.pi / 4, 4, 'Z')
+        for v in new:
+            q = R @ v.co
+            v.co = Vector((cx + q.x * w / math.sqrt(2), cy + q.y * l / math.sqrt(2), z0 + h / 2 + q.z))
+    return fn
+
+
+def dome(c, r, sz=1.0, seg=16):
+    def fn(b):
+        before = set(b.verts)
+        bmesh.ops.create_uvsphere(b, u_segments=seg, v_segments=seg // 2, radius=1.0)
+        new = [v for v in b.verts if v not in before]
+        bmesh.ops.delete(b, geom=[v for v in new if v.co.z < -1e-4], context='VERTS')
+        for v in [v for v in b.verts if v not in before]:
+            v.co = Vector((c[0] + v.co.x * r, c[1] + v.co.y * r, c[2] + v.co.z * r * sz))
+    return fn
+
+
+def arch_win(A, x, y, z0, w, h, face, col=hexc('2f4a3c'), frame=PUTIH):
+    """Jendela lengkung di dinding yang menghadap face ('x+','x-','y+','y-')."""
+    t = 0.03
+    if face[0] == 'x':
+        sx = 1 if face[1] == '+' else -1
+        A.add(frame, cube((x, y, z0 + h / 2), (t, w + 0.12, h + 0.06)))
+        A.add(col, cube((x + sx * 0.02, y, z0 + (h - w / 2) / 2), (t, w, h - w / 2)))
+        A.add(col, cyl((x + sx * 0.02, y, z0 + h - w / 2), w / 2, t, 'x', 10))
+    else:
+        sy = 1 if face[1] == '+' else -1
+        A.add(frame, cube((x, y, z0 + h / 2), (w + 0.12, t, h + 0.06)))
+        A.add(col, cube((x, y + sy * 0.02, z0 + (h - w / 2) / 2), (w, t, h - w / 2)))
+        A.add(col, cyl((x, y + sy * 0.02, z0 + h - w / 2), w / 2, t, 'y', 10))
+
+
+def tree_at(A, x, y, s=1.0, seed=0, kayu=hexc('6b4f33')):
+    A.add(kayu, cyl((x, y, 0.9 * s), 0.12 * s, 1.8 * s, 'z', 6, r2=0.08 * s))
+    for i, (dx, dy, dz, r) in enumerate(((0, 0, 2.3, 0.95), (0.5, 0.2, 2.0, 0.7), (-0.45, -0.25, 2.1, 0.7))):
+        A.add([hexc('4f8a3c'), hexc('3f7a35'), hexc('5e9a46')][(i + seed) % 3], ball((x + dx * s, y + dy * s, dz * s), r * s, 1, (1, 1, 0.85), 0.15, seed + i))
+
+
+def lot(A, col, h=0.05):
+    A.add(col, cube((-6.8, 0, h / 2), (13.6, 22.4, h)))
+
+
+# ---------- landmark (muka di x = 0 menghadap +X ke jalan, luas x -13.6..0, y -11.2..11.2) ----------
+def lm_terminal():
+    A = Asset('lm_terminal')
+    lot(A, hexc('9aa0a3'))
+    for y in (-8, -4, 0, 4, 8):
+        for x in (-4.6, -8.6):
+            A.add(PUTIH, cube((x, y, 0.06), (2.4, 0.08, 0.01)))
+    for i, x in enumerate((-2.6, -6.6, -10.6)):
+        A.add(hexc('cfc7b0'), cube((x, -0.6, 0.15), (1.8, 19.6, 0.25)))
+        A.add(hexc('f2c230'), cube((x + 0.88, -0.6, 0.28), (0.06, 19.6, 0.02)))
+        A.add(hexc('f2c230'), cube((x - 0.88, -0.6, 0.28), (0.06, 19.6, 0.02)))
+        for y in range(-10, 10, 3):
+            A.add(hexc('8d9396'), cyl((x, y, 2.0), 0.1, 3.6, 'z', 8))
+            A.add(hexc('2a6fb5'), cube((x - 0.55, y + 0.5, 0.55), (0.35, 1.4, 0.06)))
+            A.add(GELAP, cube((x - 0.55, y + 0.5, 0.35), (0.3, 1.3, 0.35)))
+        A.add(hexc('2f6fb0'), cube((x, -0.6, 3.85), (3.0, 20.4, 0.12), rot=(0, 0.08, 0)))
+        A.add(hexc('245a91'), cube((x + 1.5, -0.6, 3.72), (0.08, 20.4, 0.2)))
+    # gerbang depan tempat papan nama
+    for y in (-6.6, 6.6):
+        A.add(hexc('8d9396'), cube((-0.45, y, 2.9), (0.5, 0.5, 5.8), bevel=0.04))
+    A.add(hexc('1f4f7f'), cube((-0.45, 0, 4.8), (0.5, 13.6, 2.0), bevel=0.04))
+    # loket dan kios belakang
+    A.add(PUTIH, cube((-12.2, 9.0, 1.4), (2.4, 3.6, 2.8)))
+    A.add(KEDUA, gable(-13.6, -10.8, 7.0, 11.0, 2.8, 4.0, 'x'))
+    A.add(KACA, cube((-10.98, 9.0, 1.5), (0.02, 1.6, 1.0)))
+    for i, y in enumerate((-9.6, -7.2, -4.8, -2.4)):
+        A.add(hexc('e9e2cf'), cube((-12.6, y, 1.1), (1.8, 2.2, 2.2)))
+        A.add(hexc(['d9534f', 'e6b33a', '5aa469', '3e7cb1'][i]), cube((-11.4, y, 2.15), (0.9, 2.3, 0.06), rot=(0, 0.25, 0)))
+        A.add(GELAP, cube((-11.69, y, 1.0), (0.02, 1.6, 1.4)))
+    A.export()
+
+
+def lm_pasar():
+    A = Asset('lm_pasar')
+    lot(A, hexc('b9b1a0'))
+    tembok = hexc('d8cfb8')
+    A.add(tembok, cube((-7.6, 0, 2.2), (10.8, 20.4, 4.4)))
+    A.add(hexc('6f6a60'), cube((-2.19, 0, 3.85), (0.02, 20.4, 0.5)))
+    for y in (-6.5, -2.5, 2.5, 6.5):
+        A.add(hexc('15191c'), cube((-2.19, y, 1.5), (0.03, 2.6, 3.0)))
+    A.add(hexc('15191c'), cube((-2.19, 0, 1.7), (0.03, 3.2, 3.4)))
+    A.add(hexc('a8a091'), cube((-1.8, 0, 0.15), (0.8, 3.6, 0.3)))
+    seng = hexc('8f9aa0')
+    A.add(seng, gable(-13.6, -1.6, -10.8, 10.8, 4.4, 7.6, 'y'))
+    for k in range(1, 10):
+        x = -1.6 - k * 0.6
+        if x > -7.6:
+            A.add(hexc('7d878d'), cube((x, 0, 4.4 + (k * 0.6) * (3.2 / 6.0) + 0.02), (0.05, 21.6, 0.03)))
+        x2 = -13.6 + k * 0.6
+        if x2 < -7.6:
+            A.add(hexc('7d878d'), cube((x2, 0, 4.4 + (k * 0.6) * (3.2 / 6.0) + 0.02), (0.05, 21.6, 0.03)))
+    A.add(seng, gable(-8.6, -6.6, -10.8, 10.8, 7.7, 8.4, 'y'))
+    A.add(hexc('c0392b'), cube((-1.75, 0, 5.6), (0.2, 11.8, 2.3)))      # papan nama di atas pintu
+    for y in (-5.6, 5.6):
+        A.add(hexc('8d9396'), cube((-1.75, y, 4.6), (0.2, 0.2, 2.0)))
+    # lapak depan
+    rnd = random.Random(21)
+    sayur = ['5aa469', 'd9534f', 'e07b39', 'e6b33a', '8e6bbf', '3f7a35']
+    for i in range(9):
+        y = -10.0 + i * 2.5
+        A.add(hexc('8a6a3e'), cube((-1.0, y, 0.45), (1.2, 2.1, 0.9)))
+        for k in range(6):
+            A.add(hexc(rnd.choice(sayur)), ball((-1.3 + (k % 3) * 0.3, y - 0.6 + (k // 3) * 0.9, 0.98), 0.16, 1, (1, 1, 0.7)))
+        for dy in (-1.0, 1.0):
+            A.add(hexc('6b4f33'), cyl((-0.45, y + dy, 1.1), 0.03, 2.2, 'z', 6))
+        A.add(hexc(['d9534f', '3e7cb1', 'e6b33a', '2f8f4f', 'e07b39'][i % 5]), cube((-1.0, y, 2.2), (1.7, 2.3, 0.04), rot=(0, 0.22, 0)))
+    A.export()
+
+
+def lm_masjid():
+    A = Asset('lm_masjid')
+    krem, hijau, emas = hexc('f4efe2'), hexc('2f8f5b'), hexc('e6c84a')
+    A.add(hexc('e9e4d6'), cube((-6.8, 0, 0.08), (13.2, 21.6, 0.16)))
+    # pagar depan dengan papan nama di tengah, gerbang di kanan
+    for i in range(23):
+        y = -10.6 + i * 0.96
+        if 5.8 < y < 8.6:
+            continue
+        A.add(krem, cube((-0.3, y, 0.55), (0.24, 0.24, 1.1)))
+        A.add(hijau, cube((-0.3, y + 0.48, 0.75), (0.06, 0.7, 0.05)))
+    A.add(krem, cube((-0.3, 0, 0.35), (0.22, 21.2, 0.5)))
+    A.add(krem, cube((-0.55, 0, 1.6), (0.18, 8.4, 1.5)))
+    for y in (5.8, 8.6):
+        A.add(krem, cube((-0.3, y, 1.0), (0.45, 0.45, 2.0)))
+        A.add(hijau, dome((-0.3, y, 2.0), 0.28))
+    # serambi
+    A.add(krem, cube((-1.6, 0, 0.3), (1.6, 8.0, 0.3)))
+    for y in (-3.4, -1.15, 1.15, 3.4):
+        A.add(krem, cyl((-1.0, y, 1.9), 0.16, 3.0, 'z', 10))
+    A.add(krem, cube((-1.7, 0, 3.55), (1.8, 8.4, 0.3)))
+    A.add(hijau, cube((-0.85, 0, 3.55), (0.06, 8.4, 0.18)))
+    # ruang utama
+    A.add(krem, cube((-5.8, 0, 1.95), (6.8, 10.4, 3.6)))
+    A.add(hijau, cube((-5.8, 0, 3.85), (7.0, 10.6, 0.25)))
+    for y in (-3.6, -1.2, 1.2, 3.6):
+        arch_win(A, -2.39, y, 0.9, 0.9, 2.2, 'x+')
+    for x in (-3.9, -5.8, -7.7):
+        arch_win(A, x, 5.21, 0.9, 0.9, 2.2, 'y+')
+        arch_win(A, x, -5.21, 0.9, 0.9, 2.2, 'y-')
+    # drum, kubah utama, kubah sudut
+    A.add(krem, cyl((-5.8, 0, 4.5), 2.6, 1.1, 'z', 16))
+    for k in range(8):
+        a = k / 8 * math.tau
+        A.add(hexc('2f4a3c'), cube((-5.8 + 2.61 * math.cos(a), 2.61 * math.sin(a), 4.5), (0.05, 0.4, 0.6), rot=(0, 0, a)))
+    A.add(hijau, dome((-5.8, 0, 5.05), 2.75, 1.15, 20))
+    A.add(emas, cyl((-5.8, 0, 8.4), 0.08, 0.9, 'z', 8))
+    A.add(emas, ball((-5.8, 0, 8.25), 0.2, 1))
+    for dx, dy in ((-2.9, -4.7), (-2.9, 4.7), (-8.7, -4.7), (-8.7, 4.7)):
+        A.add(krem, cyl((dx, dy, 4.25), 0.55, 0.6, 'z', 10))
+        A.add(hijau, dome((dx, dy, 4.55), 0.6, 1.2))
+    # menara
+    mx, my = -1.6, -8.6
+    A.add(krem, cube((mx, my, 1.1), (1.4, 1.4, 2.2)))
+    A.add(krem, cyl((mx, my, 6.0), 0.5, 7.6, 'z', 8, r2=0.42))
+    for z in (4.0, 6.8):
+        A.add(hijau, cyl((mx, my, z), 0.52, 0.25, 'z', 8))
+    A.add(krem, cyl((mx, my, 9.85), 0.85, 0.15, 'z', 12))
+    for k in range(10):
+        a = k / 10 * math.tau
+        A.add(hijau, cube((mx + 0.8 * math.cos(a), my + 0.8 * math.sin(a), 10.1), (0.06, 0.06, 0.4)))
+    A.add(krem, cyl((mx, my, 10.7), 0.36, 1.5, 'z', 8))
+    A.add(hijau, dome((mx, my, 11.45), 0.42, 1.4))
+    A.add(emas, cyl((mx, my, 12.2), 0.05, 0.5, 'z', 6))
+    for x, y in ((-11.5, -8), (-11.5, 8), (-9.8, 9.5)):
+        tree_at(A, x, y, 1.2, int(x * 10 + y))
+    A.export()
+
+
+def lm_sekolah():
+    A = Asset('lm_sekolah')
+    krem, genteng = hexc('efe6d2'), hexc('b5523b')
+    lot(A, hexc('b8b2a7'))
+    A.add(hexc('c9b98a'), cube((-6.0, 0, 0.07), (7.6, 10.6, 0.04)))
+    wings = ((-11.7, 0, 2.6, 17.6, 'y'), (-6.0, 7.2, 8.8, 3.2, 'x'), (-6.0, -7.2, 8.8, 3.2, 'x'))
+    for cx, cy, dx, dy, rd in wings:
+        A.add(krem, cube((cx, cy, 1.6), (dx, dy, 3.2)))
+        A.add(hexc('3e6fb1'), cube((cx, cy, 0.25), (dx + 0.02, dy + 0.02, 0.5)))
+        A.add(genteng, gable(cx - dx / 2 - 0.5, cx + dx / 2 + 0.5, cy - dy / 2 - 0.5, cy + dy / 2 + 0.5, 3.2, 4.9, rd))
+    for i in range(6):
+        y = -6.0 + i * 2.4
+        A.add(hexc('8a5d33'), cube((-10.39, y - 0.5, 1.1), (0.03, 0.8, 2.0)))
+        A.add(hexc('5d7a8c'), cube((-10.39, y + 0.5, 1.9), (0.03, 0.9, 1.0)))
+        A.add(PUTIH, cyl((-9.6, y, 1.6), 0.08, 3.2, 'z', 6))
+    for sy in (-1, 1):
+        for i in range(3):
+            x = -3.0 - i * 2.6
+            A.add(hexc('8a5d33'), cube((x - 0.5, sy * 5.59, 1.1), (0.8, 0.03, 2.0)))
+            A.add(hexc('5d7a8c'), cube((x + 0.6, sy * 5.59, 1.9), (0.9, 0.03, 1.0)))
+    A.add(hexc('d8d8d8'), cube((-5.5, 0, 0.15), (1.2, 1.2, 0.3)))
+    A.add(PUTIH, cyl((-5.5, 0, 3.6), 0.05, 7.2, 'z', 8))
+    A.add(hexc('d33a2b'), cube((-5.5, 0.55, 6.9), (0.02, 1.0, 0.32)))
+    A.add(PUTIH, cube((-5.5, 0.55, 6.58), (0.02, 1.0, 0.32)))
+    for i in range(25):
+        y = -11.0 + i * 0.92
+        if abs(y) < 4.0:
+            continue
+        A.add(hexc('3e6fb1'), cube((-0.3, y, 0.6), (0.1, 0.1, 1.2)))
+    A.add(hexc('3e6fb1'), cube((-0.3, 0, 1.0), (0.06, 21.6, 0.06)))
+    for y in (-3.6, 3.6):
+        A.add(krem, cube((-0.6, y, 1.2), (0.3, 0.3, 2.4)))
+    A.add(PUTIH, cube((-0.65, 0, 2.0), (0.12, 7.4, 1.3)))
+    tree_at(A, -3.0, -3.5, 1.0, 3)
+    tree_at(A, -3.0, 3.5, 1.0, 4)
+    A.export()
+
+
+def lm_spbu():
+    A = Asset('lm_spbu')
+    lot(A, hexc('a7abad'))
+    for y in (-10.0, 10.0):
+        A.add(PUTIH, cube((-1.0, y, 0.06), (1.8, 0.12, 0.01)))
+    for x in (-2.8, -8.4):
+        for y in (-4.8, 4.8):
+            A.add(hexc('dddddd'), cube((x, y, 2.2), (0.4, 0.4, 4.4)))
+    A.add(PUTIH, cube((-5.6, 0, 4.75), (7.2, 11.6, 0.4)))
+    A.add(hexc('d33a2b'), cube((-5.6, 0, 4.45), (7.3, 11.7, 0.3)))
+    A.add(hexc('2a6fb5'), cube((-5.6, 0, 4.25), (7.3, 11.7, 0.1)))
+    for i, y in enumerate((-3.6, 0, 3.6)):
+        A.add(hexc('f2c230'), cube((-5.6, y, 0.12), (4.6, 0.9, 0.2)))
+        for x in (-4.4, -6.8):
+            A.add(hexc('f2f2f2'), cube((x, y, 0.95), (0.55, 0.45, 1.5), bevel=0.03))
+            A.add(hexc('d33a2b'), cube((x, y, 1.45), (0.57, 0.47, 0.3)))
+            A.add(GELAP, cube((x + 0.28, y, 1.15), (0.02, 0.3, 0.2)))
+            A.add(GELAP, cyl((x + 0.3, y + 0.15, 0.8), 0.02, 0.8, 'z', 6))
+    # minimarket belakang
+    A.add(PUTIH, cube((-12.0, 0, 1.6), (2.8, 10.0, 3.2)))
+    A.add(hexc('d33a2b'), cube((-10.59, 0, 2.8), (0.02, 10.0, 0.5)))
+    A.add(KACA, cube((-10.59, 0, 1.2), (0.02, 6.0, 2.0)))
+    # tiang papan harga (papan nama di atasnya)
+    for y in (6.4, 9.6):
+        A.add(hexc('8d9396'), cube((-0.4, y, 3.4), (0.3, 0.3, 6.8)))
+    A.add(PUTIH, cube((-0.4, 8.0, 7.6), (0.3, 5.0, 1.8)))
+    A.add(hexc('2a6fb5'), cube((-0.4, 8.0, 5.9), (0.28, 3.4, 1.4)))
+    A.export()
+
+
+def lm_alun():
+    A = Asset('lm_alun')
+    A.add(hexc('7fb04f'), cube((-6.8, 0, 0.03), (13.6, 22.4, 0.06)))
+    cx = -6.8
+    for k in range(32):
+        a = k / 32 * math.tau
+        A.add(hexc('e6dcc0'), cube((cx + 4.8 * math.cos(a), 4.8 * math.sin(a), 0.08), (0.9, 1.0, 0.03), rot=(0, 0, a)))
+    A.add(hexc('e6dcc0'), cube((cx, 0, 0.08), (13.0, 0.9, 0.03)))
+    A.add(hexc('e6dcc0'), cube((cx, 0, 0.08), (0.9, 21.0, 0.03)))
+    # beringin
+    kayu = hexc('5b4532')
+    for i in range(5):
+        a = i / 5 * math.tau
+        A.add(kayu, cyl((cx + 0.35 * math.cos(a), 0.35 * math.sin(a), 1.8), 0.28, 3.6, 'z', 7, r2=0.2))
+    for i in range(10):
+        a = i / 10 * math.tau
+        A.add(hexc('6b5a45'), cyl((cx + 1.8 * math.cos(a), 1.8 * math.sin(a), 2.0), 0.03, 4.0, 'z', 4))
+    for i, (dx, dy, dz, r) in enumerate(((0, 0, 5.4, 3.0), (2.2, 1.0, 4.6, 2.2), (-2.0, -1.2, 4.7, 2.3), (0.8, -2.4, 4.4, 2.0), (-1.0, 2.4, 4.8, 2.1), (0, 0, 6.8, 2.0))):
+        A.add([hexc('3f7a35'), hexc('2f6a2a'), hexc('467f37')][i % 3], ball((cx + dx, dy, dz), r, 2, (1, 1, 0.7), 0.12, i + 40))
+    # pendopo joglo
+    py = 8.2
+    A.add(hexc('b8b2a7'), cube((cx, py, 0.25), (4.2, 4.2, 0.5)))
+    for dx in (-1.6, 1.6):
+        for dy in (-1.6, 1.6):
+            A.add(hexc('7a5a2e'), cyl((cx + dx, py + dy, 1.85), 0.12, 2.7, 'z', 8))
+    A.add(hexc('8e3f32'), pyramid(cx, py, 3.2, 5.6, 5.6, 1.0, 1.4))
+    A.add(hexc('8e3f32'), pyramid(cx, py, 4.2, 2.0, 2.0, 1.4, 0.05))
+    # bangku, lampu, pohon keliling
+    for k in range(6):
+        a = (k + 0.5) / 6 * math.tau
+        x, y = cx + 5.6 * math.cos(a), 5.6 * math.sin(a)
+        if abs(y - py) < 3:
+            continue
+        A.add(hexc('7a5a2e'), cube((x, y, 0.45), (0.5, 1.4, 0.08), rot=(0, 0, a)))
+        A.add(hexc('333333'), cube((x, y, 0.22), (0.4, 1.2, 0.44), rot=(0, 0, a)))
+    for k in range(10):
+        a = k / 10 * math.tau
+        x, y = cx + 6.2 * math.cos(a) * 0.95, 9.4 * math.sin(a)
+        if abs(y - py) < 2.6 and x > cx - 3:
+            continue
+        tree_at(A, x, y, 1.1, k)
+    for i in range(23):
+        A.add(hexc('2f5d2a'), cube((-0.25, -10.8 + i * 0.98, 0.4), (0.08, 0.08, 0.8)))
+    A.add(hexc('2f5d2a'), cube((-0.25, 0, 0.7), (0.05, 21.6, 0.05)))
+    A.add(PUTIH, cube((-0.45, 0, 1.2), (0.1, 6.2, 1.2)))
+    A.export()
+
+
+def lm_kampus():
+    A = Asset('lm_kampus')
+    lot(A, hexc('d8d2c0'))
+    A.add(hexc('7fb04f'), cube((-2.2, -6.5, 0.06), (2.8, 7.0, 0.03)))
+    A.add(hexc('7fb04f'), cube((-2.2, 6.5, 0.06), (2.8, 7.0, 0.03)))
+    for y in (-3.4, 3.4):
+        A.add(hexc('6f7d86'), cube((-0.7, y, 2.6), (1.2, 1.2, 5.2), bevel=0.04))
+    A.add(hexc('1b2630'), cube((-0.75, 0, 3.85), (0.8, 8.0, 1.2), bevel=0.03))
+    def gedung(y0, y1, lantai):
+        h = 3.2 * lantai
+        A.add(hexc('aab6bd'), cube((-8.2, (y0 + y1) / 2, h / 2), (8.0, y1 - y0, h)))
+        for f in range(lantai):
+            z = 3.2 * f
+            A.add(PUTIH, cube((-4.18, (y0 + y1) / 2, z + 0.15), (0.06, y1 - y0, 0.3)))
+            A.add(hexc('3f6f8f'), cube((-4.18, (y0 + y1) / 2, z + 1.6), (0.04, y1 - y0 - 0.4, 1.6)))
+            for k in range(int((y1 - y0) / 1.6)):
+                A.add(hexc('8f9aa0'), cube((-4.16, y0 + 0.8 + k * 1.6, z + 1.6), (0.05, 0.12, 1.6)))
+        A.add(hexc('6f7d86'), cube((-8.2, (y0 + y1) / 2, h + 0.2), (8.2, y1 - y0 + 0.2, 0.4)))
+    gedung(-9.8, -2.6, 4)
+    gedung(2.0, 9.8, 3)
+    A.add(hexc('3f6f8f'), cube((-7.6, -0.3, 2.0), (5.0, 4.4, 4.0)))
+    A.add(PUTIH, cube((-5.0, -0.3, 4.1), (0.4, 5.0, 0.2)))
+    for k in range(3):
+        A.add(PUTIH, cyl((-2.4, -1.2 + k * 1.2, 3.5), 0.04, 7.0, 'z', 6))
+        A.add(hexc(['d33a2b', '2a6fb5', 'f2c230'][k]), cube((-2.4, -1.2 + k * 1.2 + 0.45, 6.6), (0.02, 0.8, 0.5)))
+    tree_at(A, -2.2, -8.5, 1.0, 1)
+    tree_at(A, -2.2, 8.5, 1.0, 2)
+    A.export()
+
+
+def lm_stasiun():
+    A = Asset('lm_stasiun')
+    krem, genteng = hexc('efe6d2'), hexc('c4683f')
+    lot(A, hexc('bdb7a4'))
+    A.add(krem, cube((-3.8, 0, 1.8), (5.2, 19.2, 3.6)))
+    A.add(hexc('5b6a3c'), cube((-3.8, 0, 0.3), (5.24, 19.24, 0.6)))
+    A.add(genteng, gable(-6.9, -0.7, -10.0, 10.0, 3.6, 5.6, 'y'))
+    for y in (-8.0, -5.6, -3.2, 3.2, 5.6, 8.0):
+        arch_win(A, -1.19, y, 0.9, 1.0, 2.2, 'x+', col=hexc('1f3a4f'))
+    # blok tengah dengan menara jam
+    A.add(krem, cube((-3.6, 0, 2.6), (5.6, 4.8, 5.2)))
+    A.add(genteng, gable(-6.6, -0.6, -2.8, 2.8, 5.2, 7.0, 'x'))
+    A.add(hexc('15191c'), cube((-0.79, 0, 1.0), (0.03, 2.4, 2.0)))
+    A.add(PUTIH, cube((-0.8, 0, 2.8), (0.1, 8.6, 1.5)))
+    A.add(krem, cube((-3.6, 0, 7.2), (1.6, 1.6, 2.0)))
+    A.add(PUTIH, cyl((-2.79, 0, 7.4), 0.5, 0.04, 'x', 16))
+    A.add(GELAP, cube((-2.76, 0, 7.55), (0.02, 0.05, 0.35)))
+    A.add(GELAP, cube((-2.76, 0.1, 7.4), (0.02, 0.25, 0.05)))
+    A.add(genteng, pyramid(-3.6, 0, 8.2, 2.2, 2.2, 1.2, 0.05))
+    # peron dan kanopi di belakang, rel
+    A.add(hexc('bdb7a4'), cube((-7.4, 0, 0.45), (1.6, 21.0, 0.9)))
+    A.add(hexc('f2c230'), cube((-8.18, 0, 0.91), (0.08, 21.0, 0.02)))
+    for y in range(-9, 10, 3):
+        A.add(hexc('6f7d86'), cyl((-7.4, y, 2.4), 0.09, 3.0, 'z', 6))
+    A.add(hexc('6f7d86'), cube((-7.4, 0, 3.95), (2.4, 21.0, 0.1), rot=(0, 0.1, 0)))
+    for x in (-9.6, -12.2):
+        A.add(hexc('8f8676'), cube((x, 0, 0.1), (2.2, 22.4, 0.2)))
+        for k in range(28):
+            A.add(hexc('6b5a45'), cube((x, -10.8 + k * 0.8, 0.22), (1.8, 0.2, 0.06)))
+        for dx in (-0.55, 0.55):
+            A.add(hexc('c0c4c7'), cube((x + dx, 0, 0.3), (0.07, 22.4, 0.08)))
+    A.export()
+
+
+def lm_griya():
+    A = Asset('lm_griya')
+    lot(A, hexc('7fb04f'))
+    A.add(hexc('8f9396'), cube((-6.8, 0, 0.07), (13.6, 3.4, 0.04)))
+    A.add(hexc('d6ccb2'), cube((-6.8, 2.0, 0.08), (13.6, 0.6, 0.06)))
+    A.add(hexc('d6ccb2'), cube((-6.8, -2.0, 0.08), (13.6, 0.6, 0.06)))
+    for y in (-2.4, 2.4):
+        A.add(hexc('e8e2d0'), cube((-0.88, y, 2.2), (0.9, 0.9, 4.4), bevel=0.04))
+        A.add(hexc('8e3f32'), pyramid(-0.88, y, 4.4, 1.2, 1.2, 0.6, 0.05))
+    A.add(hexc('e8e2d0'), cube((-0.95, 0, 3.45), (0.5, 5.4, 1.1), bevel=0.03))
+    A.add(hexc('8e3f32'), gable(-1.4, -0.5, -2.9, 2.9, 4.0, 4.5, 'y'))
+    A.add(hexc('d9cdb0'), cube((-1.2, 4.4, 1.2), (1.6, 1.6, 2.4)))
+    A.add(hexc('8e3f32'), pyramid(-1.2, 4.4, 2.4, 2.0, 2.0, 0.8, 0.05))
+    A.add(KACA, cube((-0.39, 4.4, 1.5), (0.02, 0.9, 0.7)))
+    pastel = ['f2e6c9', 'd9e8e0', 'f2d9cf', 'e0e2f0']
+    for side in (-1, 1):
+        for i, x in enumerate((-3.4, -6.6, -9.8, -12.9)):
+            y = side * 6.6
+            A.add(hexc(pastel[(i + (side > 0)) % 4]), cube((x, y, 1.4), (2.6, 4.2, 2.8)))
+            A.add(hexc('8e3f32'), gable(x - 1.6, x + 1.6, y - 2.4, y + 2.4, 2.8, 4.2, 'x'))
+            A.add(hexc('8a5d33'), cube((x, y - side * 2.11, 1.0), (0.8, 0.03, 2.0)))
+            A.add(hexc('5d7a8c'), cube((x + 0.8, y - side * 2.11, 1.6), (0.7, 0.03, 0.9)))
+            A.add(PUTIH, cube((x, y - side * 2.9, 0.4), (2.8, 0.06, 0.8)))
+            A.add(hexc('d6ccb2'), cube((x, y - side * 2.5, 0.06), (1.2, 0.8, 0.04)))
+        tree_at(A, -2.0, side * 9.6, 0.9, 5)
+    A.export()
+
+
+def rumah_jauh():
+    """Rumah kampung sangat ringan untuk latar jauh. Alas 1×1 m, tinggi 1 m (dinding 0.6), di-scale per instance."""
+    A = Asset('rumah_jauh')
+    A.add(CAT, cube((0, 0, 0.3), (0.92, 0.92, 0.6)))
+    A.add(KEDUA, gable(-0.52, 0.52, -0.52, 0.52, 0.58, 1.0, 'y'))
+    A.add(hexc('3a2a1c'), cube((0.465, -0.15, 0.2), (0.01, 0.16, 0.34)))
+    A.add(hexc('2f4a5c'), cube((0.465, 0.2, 0.33), (0.01, 0.2, 0.14)))
+    A.add(hexc('2f4a5c'), cube((-0.465, 0.0, 0.33), (0.01, 0.2, 0.14)))
+    A.export()
+
+
+def pohon_jauh():
+    A = Asset('pohon_jauh')
+    A.add(hexc('6b4f33'), cyl((0, 0, 0.5), 0.08, 1.0, 'z', 4))
+    A.add(hexc('4f8a3c'), ball((0, 0, 1.35), 0.6, 1, (1, 1, 0.9), 0.15, 2))
+    A.add(hexc('5e9a46'), ball((0.15, 0.1, 1.8), 0.4, 1, (1, 1, 0.9), 0.15, 3))
+    A.export()
+
+
+def palang():
+    """Palang perlintasan: tiang dengan rambu silang dan dua lampu sinyal (mesh 'lampu'), lengan palang (mesh 'lengan')
+    berporos di titik asal dan menjulur ke +X. Tiang berdiri di (0, 0) dengan poros lengan di z 1.3 m."""
+    A = Asset('palang')
+    besi = hexc('5a6066')
+    A.add(besi, cube((0, 0, 0.35), (0.5, 0.4, 0.7)))
+    A.add(PUTIH, cyl((0, 0, 1.9), 0.06, 3.8, 'z', 8))
+    for rz in (0.6, -0.6):
+        A.add(PUTIH, cube((0, -0.05, 3.45), (1.2, 0.03, 0.18), rot=(0, rz, 0)))
+        A.add(hexc('d33a2b'), cube((0, -0.07, 3.45), (1.1, 0.01, 0.06), rot=(0, rz, 0)))
+    A.add(GELAP, cube((0, -0.04, 2.7), (0.9, 0.06, 0.32)))
+    for x in (-0.3, 0.3):
+        A.add(GELAP, cyl((x, -0.12, 2.7), 0.15, 0.12, 'y', 10))
+        A.add(PUTIH, cyl((x, -0.19, 2.7), 0.11, 0.02, 'y', 10), 'lampu')
+    A.add(besi, cube((0, 0, 1.3), (0.3, 0.3, 0.3)))
+    def lengan(b):
+        pass
+    for k in range(16):
+        A.add(PUTIH if k % 2 else hexc('d33a2b'), cube((0.3 + k * 0.6, 0, 0), (0.6, 0.08, 0.1)), 'lengan')
+    A.add(hexc('333333'), cube((-0.4, 0, 0), (0.6, 0.14, 0.24)), 'lengan')
+    A.export()
+
+
 if __name__ == '__main__':
     print('Membuat aset ke', OUT)
-    for fn in (angkot, mobil, pikap, truk, motor, kereta, orang, pohon_mangga, pohon_kelapa, lampu_jalan, lampu_merah, gerobak, ruko, rumah, warung):
+    angkot('05', 'angkot')
+    for no in ('05', '09', '12'):
+        angkot(no, 'angkot_' + no)
+    for fn in (mobil, pikap, truk, motor, kereta, orang, pohon_mangga, pohon_kelapa, lampu_jalan, lampu_merah, gerobak, ruko, rumah, warung):
+        fn()
+    for fn in (lm_terminal, lm_pasar, lm_masjid, lm_sekolah, lm_spbu, lm_alun, lm_kampus, lm_stasiun, lm_griya, rumah_jauh, pohon_jauh, palang):
         fn()
     motor('motor_parkir', rider=False)
     tiang('tiang')

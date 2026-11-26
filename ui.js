@@ -6,7 +6,6 @@ app.innerHTML = '<div id="v"></div><div id="ny"></div><div id="roti" class="roti
 const V = document.getElementById('v'), roti = document.getElementById('roti'), NY = document.getElementById('ny');
 const fmt = G.fmt;
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const TINT = { hijau: 'none', biru: 'hue-rotate(62deg) saturate(1.1) brightness(1.12)', kuning: 'hue-rotate(-76deg) saturate(1.6) brightness(1.3)', merah: 'hue-rotate(-128deg) saturate(1.35)', ungu: 'hue-rotate(148deg) saturate(.95)' };
 const HEX = { hijau: '#1a8f4c', biru: '#35b3c9', kuning: '#f2b90f', merah: '#d43a2b', ungu: '#7a4fd0' };
 const RC = { '05': 'var(--t05)', '09': 'var(--t09)', '12': 'var(--t12)' };
 const PATHS = { '05': 'M48 138 C 92 154, 122 120, 172 110', '09': 'M48 138 C 38 100, 68 72, 96 46', '12': 'M172 110 C 200 82, 222 68, 252 60 S 302 112, 298 148' };
@@ -48,7 +47,7 @@ function hdr() {
 function goalsHTML() {
   return G.goals(S).map(g => { const done = g.cur >= g.max; return `<div class="karcis ${done ? 'done' : ''}"><div class="stub">${esc(g.scope)}</div><div class="isi"><p>${esc(g.text)}</p>${bar(g.cur, g.max)}${g.note ? `<small>${esc(g.note)}</small>` : ''}</div></div>`; }).join('');
 }
-function img(a, extra) { return `<img src="angkot.webp" alt="" width="720" height="439" style="filter:${TINT[a ? a.color : 'hijau']}${extra || ''}">`; }
+function img(a) { return `<img src="assets/img/angkot-${a ? a.color : 'hijau'}.webp" alt="" width="720" height="439">`; }   // render Blender per warna cat (tools/blender/render_sprites.py)
 
 /* ---------- pagi ---------- */
 function angkotCard(a) {

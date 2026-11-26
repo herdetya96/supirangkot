@@ -8,7 +8,8 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 - `npm run serve` lalu buka `http://localhost:5173`
 - `npm run sim` menjalankan `sim.js` (300 permainan per strategi). Jalankan setiap kali angka ekonomi diubah.
 - `npm run drive` menjalankan `drivebot.js`: dua bot sopir memainkan mini-game nyetir 200 kali. Jalankan setiap kali `drive.js` atau `G.DRIVE` diubah.
-- `npm run assets` membuat ulang model 3D di `assets/models/*.glb` dari `tools/blender/build_assets.py`.
+- `npm run assets` membuat ulang model 3D di `assets/models/*.glb` dari `tools/blender/build_assets.py`, membungkusnya jadi
+  `assets/models.js`, lalu merender gambar angkot menu `assets/img/angkot-<warna>.webp` dengan Cycles (`tools/blender/render_sprites.py`).
   Butuh Blender sebagai modul Python (`pip install bpy`, Blender 4.2+; dibuat dengan bpy 5.3.0, Python 3.13).
   Hasil `.glb` ikut di-commit, jadi game tidak butuh Blender untuk jalan. Setelah itu `tools/pack_models.js` membungkus semua
   `.glb` jadi `assets/models.js` (base64, ±1,3 MB) karena halaman artifact tidak menyajikan `.glb`; `drive3d.js` memuat
@@ -26,9 +27,15 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   Hanya menggambar: dunia statis per trayek dibangun sekali (`buildStatic`, jalan sebagai pita berwarna per titik, bangunan dan pohon
   lewat `InstancedMesh`), lalu tiap frame memindahkan kendaraan, orang, lampu, kamera. Satu `WebGLRenderer` dipakai ulang antar rit.
   Kalau three.js atau WebGL tidak ada, `mount` otomatis memakai peta 2D.
-- Aset 3D (`assets/models/*.glb`) dimodelkan prosedural di Blender lewat `tools/blender/build_assets.py`: 18 model
-  (angkot, mobil, pikap, truk, motor dan versi parkir, kereta, orang, pohon mangga dan kelapa, tiang listrik dan tiang trafo,
-  lampu jalan, lampu merah, gerobak bakso, ruko, rumah, warung). Satuan meter, 1 m = 25 unit game (`M2U` di `drive3d.js`).
+- Aset 3D (`assets/models/*.glb`) dimodelkan prosedural di Blender lewat `tools/blender/build_assets.py`: 33 model.
+  Kendaraan: angkot (kabin penumpang berongga, jok, pintu geser terbuka, tulisan 3D dari huruf Blender; varian `angkot_05`,
+  `angkot_09`, `angkot_12` dengan nomor dan papan trayek masing-masing, `angkot` = 05 untuk angkot lain), mobil, pikap, truk,
+  motor dan versi parkir, kereta. Orang. Pinggir jalan: ruko, rumah, warung, pohon mangga dan kelapa, tiang listrik dan trafo,
+  lampu jalan, lampu merah, gerobak, palang kereta (mesh `lengan` berporos, mesh `lampu`). Latar: `rumah_jauh` dan `pohon_jauh`
+  (±50 segitiga). Landmark `lm_<jenis>`: terminal, pasar, masjid, sekolah, spbu, alun, kampus, stasiun, griya; muka di x = 0
+  menghadap +X, luas 13,6 × 22,4 m, dipasang di u = −150 (kiri) atau u = 310 diputar 180° (kanan). Papan nama tetap tekstur
+  kanvas di JS (`LBL` di `drive3d.js`), diletakkan tepat di depan papan pada model. `.glb` diekspor tanpa normal; JS menghitung
+  normal bidang datar. Satuan meter, 1 m = 25 unit game (`M2U` di `drive3d.js`).
   Kendaraan menghadap +Y Blender (−Z three.js), bangunan menghadap +X (ke jalan). Warna disimpan per sudut, tanpa tekstur.
   Warna penanda diganti di JS (`assetGeo`): (1,0,1) cat badan/dinding, (0,1,1) baju/genteng, (0.5,0,1) helm/kanopi/terpal.
   Orang terdiri dari mesh `celana`, `baju`, `kulit`, `rambut` yang diwarnai per instance. `drive3d.js` memuatnya dengan
@@ -51,9 +58,11 @@ Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik 
 ## Mini-game nyetir
 
 Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
-60 detik di kota Cibening. Kontroler: setir bulat di kiri (posisi jempol = putaran; tengah = klakson), pedal REM dan GAS
-di kanan. Tanpa gas angkot melambat sendiri (`COAST` 75/dtk²); setir menggeser ke samping sebanding laju, jadi angkot diam
-tidak bisa pindah lajur. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, H klakson, C kamera. Bot (`drivebot.js`) tetap
+60 detik di kota Cibening. Kontroler: setir bulat di kiri, tombol klakson, pedal REM dan GAS di kanan. Tanpa gas angkot
+melambat sendiri (`COAST` 75/dtk²). Setir memakai bantuan lajur: ditahan = bergeser (makin cepat makin lincah), dilepas =
+meluncur ke tengah lajur terdekat searah belokan; sentuhan sesingkat apa pun pindah minimal satu lajur (`press`/`lane` di Sim).
+Angkot diam tidak bisa bergeser. Bot "jempol" (sentuh-lepas dengan reaksi 0,25 dtk) naik dari 11,5 ke 14 penumpang dan dari
+Rp 74 rb ke Rp 105 rb per rit dibanding setir tanpa bantuan. Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, H klakson, C kamera. Bot (`drivebot.js`) tetap
 memakai target lajur `inp.tx` dan gas penuh kecuali saat mengerem, jadi angka keseimbangan tidak berubah. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
 `localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Setir jari memakai posisi angkot di layar
 (`o.psx`, `o.ppu`), jadi sama untuk ketiganya. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat
@@ -137,12 +146,13 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
   Adegan pembuka Bab 3 sekarang memberi peringatan, tapi akar masalahnya di Bab 2 belum diseimbangkan.
 - Simpan lintas perangkat, suara, tutorial bertahap, pencapaian, berbagi tangkapan layar.
 - Pendapatan saat pemain pergi sudah ada (`G.offline`, maks 8 jam, hanya Bab 2) tapi belum diseimbangkan.
-- Peta masih skematis; sprite angkot cuma satu sudut dan warna lain memakai filter CSS.
+- Peta siang di layar rit masih skematis (SVG). Gambar angkot menu sekarang render Blender per warna; `angkot.webp`
+  (render asli prototipe) tidak dipakai lagi tapi disimpan.
 - Belum ada tes unit; `sim.js` dan `drivebot.js` satu-satunya jaring pengaman.
 - Mini-game nyetir belum punya suara, getar, atau tutorial bertahap; penjelasannya hanya kartu sebelum rit.
 - Tampilan 3D belum pernah diukur di HP sungguhan. Di Chromium headless (WebGL perangkat lunak) sekitar 6 fps dengan aset
   Blender; aset dimuat ±1 dtk lewat jaringan lokal (±1 MB). Belum ada pilihan kualitas grafis.
-- Landmark (masjid, terminal, pasar, dan lain-lain) masih bentuk prosedural di `drive3d.js`, belum dari Blender.
+- Masih bentuk JS sederhana: aspal, marka, sungai, jembatan, rambu, kampung jauh kalau aset gagal dimuat.
 - Kontroler belum diuji dengan jari di HP sungguhan; ukuran setir dan pedal mungkin perlu disesuaikan.
 
 ## Gaya tulisan

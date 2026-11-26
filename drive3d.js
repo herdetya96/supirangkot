@@ -19,8 +19,9 @@ const rotOf = a => -a - Math.PI / 2;            // arah jalan → rotation.y ben
 
 /* ---------- aset dari Blender (tools/blender/build_assets.py → assets/models/*.glb) ---------- */
 const M2U = 25;                                   // 1 meter Blender = 25 unit game
-const ASSET_NAMES = ['angkot', 'mobil', 'pikap', 'truk', 'motor', 'motor_parkir', 'kereta', 'orang', 'pohon_mangga', 'pohon_kelapa',
-  'lampu_jalan', 'lampu_merah', 'gerobak', 'ruko', 'rumah', 'warung', 'tiang', 'tiang_trafo'];
+const ASSET_NAMES = ['angkot', 'angkot_05', 'angkot_09', 'angkot_12', 'mobil', 'pikap', 'truk', 'motor', 'motor_parkir', 'kereta', 'orang', 'pohon_mangga', 'pohon_kelapa',
+  'lampu_jalan', 'lampu_merah', 'gerobak', 'ruko', 'rumah', 'warung', 'tiang', 'tiang_trafo', 'rumah_jauh', 'pohon_jauh', 'palang',
+  'lm_terminal', 'lm_pasar', 'lm_masjid', 'lm_sekolah', 'lm_spbu', 'lm_alun', 'lm_kampus', 'lm_stasiun', 'lm_griya'];
 const MARK = { cat: [1, 0, 1], kedua: [0, 1, 1], ketiga: [0.5, 0, 1] };
 const AS = { state: 'idle', geo: {}, promise: null, base: 'assets/models/' };
 function loadAssets() {
@@ -54,7 +55,9 @@ function extract(gltf) {
     // r128: getX() memberi angka mentah, jadi warna uint8/uint16 ternormalisasi dibagi manual
     const div = c && c.normalized ? (c.array instanceof Uint16Array ? 65535 : c.array instanceof Uint8Array ? 255 : 1) : 1;
     for (let i = 0; i < n; i++) { col[i * 3] = c ? c.getX(i) / div : 1; col[i * 3 + 1] = c ? c.getY(i) / div : 1; col[i * 3 + 2] = c ? c.getZ(i) / div : 1; }
-    g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.computeBoundingSphere();
+    g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    if (!g.getAttribute('normal')) g.computeVertexNormals();   // .glb tanpa normal: bidang datar dihitung di sini
+    g.computeBoundingSphere();
     out[ob.name] = g;
   });
   return out;
@@ -272,7 +275,14 @@ function buildStatic(Wd) {
     trunks.push({ x, z, y: y0 || 0, sx: 4, sy: r * 1.6, sz: 4, col: '#6b4f33' }); leaves.push({ x, z, y: (y0 || 0) + r * 1.9, sx: r * 1.25, sy: r * 1.15, sz: r * 1.25, col: ['#4f8a3c', '#3f7a35', '#5e9a46'][h % 3], ry: h % 6 }); };
   for (const cell of cells) {
     const { cx, cy, h } = cell;
-    if (cell.kind === 'rumah') {
+    if (cell.kind === 'rumah' && useA) {
+      for (let k = 0; k < 4; k++) {
+        const hh = hash(h + k); if (hh % 5 === 0) continue;
+        const w = 44 + hh % 22, l = 40 + (hh >>> 4) % 26, x = cx - 70 + (k % 2) * 72 + (hh >>> 8) % 8 + w / 2, z = cy - 70 + Math.floor(k / 2) * 72 + (hh >>> 11) % 8 + l / 2;
+        const ri = (hh >>> 14) % A.ROOF.length;
+        addA('jauh' + ri, 'rumah_jauh', 'main', { cat: WALLS[ri % WALLS.length], kedua: A.ROOF[ri] }, { x, z, ry: hh % 2 ? 0 : Math.PI / 2, sx: (w - 6) / 25, sy: (34 + hh % 16) / 15, sz: (l - 6) / 25 });
+      }
+    } else if (cell.kind === 'rumah') {
       for (let k = 0; k < 4; k++) {
         const hh = hash(h + k); if (hh % 5 === 0) continue;
         const w = 44 + hh % 22, l = 40 + (hh >>> 4) % 26, x = cx - 70 + (k % 2) * 72 + (hh >>> 8) % 8 + w / 2, z = cy - 70 + Math.floor(k / 2) * 72 + (hh >>> 11) % 8 + l / 2;
@@ -280,7 +290,7 @@ function buildStatic(Wd) {
         walls.push({ x, z, sx: w - 8, sy: wh, sz: l - 8, col: WALLS[(hh >>> 3) % WALLS.length] });
         roofs.push({ x, z, y: wh, ry: rot, sx: rot ? l : w, sy: 22 + hh % 12, sz: rot ? w : l, col: A.ROOF[(hh >>> 14) % A.ROOF.length] });
       }
-    } else if (cell.kind === 'pohon') { for (let k = 0; k < 6; k++) { const hh = hash(h + k * 11); tree(cx - 60 + hh % 120, cy - 60 + (hh >>> 7) % 120, 14 + hh % 10, hh); } }
+    } else if (cell.kind === 'pohon') { for (let k = 0; k < 6; k++) { const hh = hash(h + k * 11), x = cx - 60 + hh % 120, z = cy - 60 + (hh >>> 7) % 120, r = 14 + hh % 10; if (useA) addA('pjauh', 'pohon_jauh', 'main', null, { x, z, ry: (hh % 628) / 100, sx: r / 16, sy: r / 15, sz: r / 16 }); else tree(x, z, r, hh); } }
     else if (cell.kind === 'sawah') {
       F.flat([[cx - 72, cy - 72], [cx + 72, cy - 72], [cx + 72, cy + 72], [cx - 72, cy + 72]], 0.2, (h % 2) ? '#8fbf5a' : '#a7c96a');
       for (let k = -66; k < 72; k += 12) F.flat([[cx - 70, cy + k], [cx + 70, cy + k], [cx + 70, cy + k + 2], [cx - 70, cy + k + 2]], 0.4, '#79a84a');
@@ -392,9 +402,29 @@ function buildStatic(Wd) {
 }
 
 /* ---------- landmark ---------- */
+// papan nama landmark versi Blender: [jarak dari tengah lajur kiri (a), tinggi, lebar, tinggi papan, geser sepanjang jalan]
+const LBL = { terminal: [154, 120, 300, 46, 0, '#1f6fb5', '#ffffff'], pasar: [190, 140, 280, 50, 0, '#c0392b', '#ffffff'],
+  masjid: [160, 40, 200, 30, 0, '#2f8f5b', '#ffffff'], sekolah: [164, 50, 180, 28, 0, '#ffffff', '#8e3f32'],
+  spbu: [160, 190, 120, 40, 200, '#d33a2b', '#ffffff'], alun: [158, 30, 150, 26, 0, '#2f5d2a', '#ffffff'],
+  kampus: [156, 96, 150, 26, 0, '#1b2630', '#ffd400'], stasiun: [168, 70, 215, 34, 0, '#1f6fb5', '#ffffff'],
+  griya: [166, 86, 120, 24, 0, '#ffffff', '#1b2630'] };
 function landmark(Wd, L, A) {
   const T = root.THREE, p = Wd.at(L.d), g = new T.Group(), b = new GB(), s = L.side, half = L.len / 2;
   g.position.set(p.x, 0, p.y); g.rotation.y = rotOf(p.a);
+  if (hasAsset('lm_' + L.kind)) {
+    // model Blender: muka di x = 0 menghadap +X; sisi kiri jalan di u = -150, sisi kanan di u = 310 diputar 180°
+    const m = new T.Mesh(assetGeo('lm_' + L.kind), new T.MeshLambertMaterial({ vertexColors: true }));
+    m.position.set(s < 0 ? -150 : 310, 0, 0); m.rotation.y = s < 0 ? 0 : Math.PI; g.add(m);
+    const [a, y, w, h, dz, bg, fg] = LBL[L.kind];
+    const lab = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ map: labelTex(L.label, bg, fg, 512, Math.round(512 * h / w)), side: T.DoubleSide }));
+    lab.position.set(s < 0 ? -a + 2 : a + 160 - 2, y, s < 0 ? -dz : dz); lab.rotation.y = s < 0 ? Math.PI / 2 : -Math.PI / 2; g.add(lab);
+    if (L.kind === 'terminal') {
+      const cols = ['#1a8f4c', '#f2b90f', '#35b3c9', '#1a8f4c', '#d43a2b'], mat = new T.MeshLambertMaterial({ vertexColors: true });
+      let i = 0;
+      for (const u of [-265, -365]) for (const dd of [-200, -100, 0, 100, 200]) { if ((i * 7) % 5 === 3) { i++; continue; } const v = new T.Mesh(vehicleGeo('angkot', cols[i % cols.length]), mat); v.position.set(u, 0, -dd); v.rotation.y = i % 2 ? Math.PI : 0; g.add(v); i++; }
+    }
+    return g;
+  }
   const E = 150;                                        // jarak tepi bangunan dari tengah lajur kita (sisi kiri)
   const U = a => s < 0 ? -a : a + 160;                  // jarak dari tepi jalan → koordinat lateral lokal
   const bx = (a0, a1, d0, d1, y0, y1, col) => { const u0 = U(a0), u1 = U(a1); b.box(Math.min(u0, u1), Math.max(u0, u1), y0, y1, -d1, -d0, col); };
@@ -494,7 +524,7 @@ function createImpl(canvas, S, spec, o) {
   const mk = (kind, col, c2, c3) => { const m = new T.Mesh(vehicleGeo(kind, col, c2, c3), vmat); dyn.add(m); return m; };
   const motorCols = h => hasAsset('motor') ? [A.CARC[(h + 3) % 8], A.SHIRT[h % 8], HELM[h % 8]] : [A.SHIRT[h % 8]];
   // angkot pemain
-  const me = mk('angkot', o.hex);
+  const me = mk(hasAsset('angkot_' + spec.route) ? 'angkot_' + spec.route : 'angkot', o.hex);
   const brakeMat = new T.MeshBasicMaterial({ color: 0x5a1410 }); mats.push(brakeMat);
   if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); } }
   else { const brake = new T.Mesh(new T.BoxGeometry(40, 5, 1.5), brakeMat); brake.position.set(0, 16.5, 43.2); me.add(brake); }
@@ -542,9 +572,21 @@ function createImpl(canvas, S, spec, o) {
       const lamps = ['merah', 'kuning', 'hijau'].map((k, i) => { const mt = new T.MeshBasicMaterial({ color: 0x333333 }); mats.push(mt); const m = new T.Mesh(new T.BoxGeometry(9, 9, 2), mt); m.position.set(-36 + i * 13, 136, 78.6); g.add(m); return { k, mt }; });
       tls.push({ L, lamps });
     } else {
-      const b = new GB(); b.box(-140, -134, 4, 70, 60, 66, '#555'); b.box(296, 302, 4, 70, -66, -60, '#555'); g.add(new T.Mesh(b.geo(), vmat));
-      const arm = (x, z, dir) => { const pv = new T.Group(); pv.position.set(x, 36, z); g.add(pv); const ab = new GB(); for (let i = 0; i < 16; i++) ab.box(dir > 0 ? i * 15 : -(i + 1) * 15, dir > 0 ? (i + 1) * 15 : -i * 15, -3, 3, -2, 2, i % 2 ? '#ffffff' : '#d33a2b'); pv.add(new T.Mesh(ab.geo(), vmat)); return pv; };
       const lt = new T.MeshBasicMaterial({ color: 0x441111 }); mats.push(lt);
+      if (hasAsset('palang')) {
+        // tiang palang Blender di kedua sisi; lengan berporos di 1,3 m dan diputar naik saat terbuka
+        const arms = [];
+        for (const [x, z, ry] of [[-137, 63, 0], [299, -63, Math.PI]]) {
+          const post = new T.Mesh(assetGeo('palang'), vmat); post.position.set(x, 4, z); post.rotation.y = ry; g.add(post);
+          const lp = new T.Mesh(assetGeo('palang', 'lampu'), lt); lp.position.copy(post.position); lp.rotation.y = ry; g.add(lp);
+          const pv = new T.Group(); pv.position.set(x, 4 + 32.5, z); pv.rotation.y = ry; pv.userData.up = 1; g.add(pv);
+          pv.add(new T.Mesh(assetGeo('palang', 'lengan'), vmat)); arms.push(pv);
+        }
+        tls.push({ L, rail: true, arms, lt });
+        continue;
+      }
+      { const b = new GB(); b.box(-140, -134, 4, 70, 60, 66, '#555'); b.box(296, 302, 4, 70, -66, -60, '#555'); g.add(new T.Mesh(b.geo(), vmat)); }
+      const arm = (x, z, dir) => { const pv = new T.Group(); pv.position.set(x, 36, z); g.add(pv); const ab = new GB(); for (let i = 0; i < 16; i++) ab.box(dir > 0 ? i * 15 : -(i + 1) * 15, dir > 0 ? (i + 1) * 15 : -i * 15, -3, 3, -2, 2, i % 2 ? '#ffffff' : '#d33a2b'); pv.add(new T.Mesh(ab.geo(), vmat)); return pv; };
       const l1 = new T.Mesh(new T.BoxGeometry(10, 10, 3), lt); l1.position.set(-137, 66, 67); g.add(l1);
       const l2 = new T.Mesh(new T.BoxGeometry(10, 10, 3), lt); l2.position.set(299, 66, -67); g.add(l2);
       tls.push({ L, rail: true, arms: [arm(-137, 63, 1), arm(299, -63, -1)], lt });
@@ -617,14 +659,17 @@ function createImpl(canvas, S, spec, o) {
       if (tl.rail) {
         const closed = stt !== 'hijau', blink = Math.floor(t * 3) % 2;
         tl.lt.color.set(closed && blink ? '#ff3b2f' : '#441111');
-        for (const a of tl.arms) { const target = closed ? 0 : (a.position.x < 0 ? 1.35 : -1.35); a.rotation.z += (target - a.rotation.z) * Math.min(1, dt * 4); }
+        for (const a of tl.arms) { const target = closed ? 0 : (a.userData.up || a.position.x < 0 ? 1.35 : -1.35); a.rotation.z += (target - a.rotation.z) * Math.min(1, dt * 4); }
       } else for (const lp of tl.lamps) lp.mt.color.set(lp.k === stt ? { merah: '#ff3b2f', kuning: '#ffcc00', hijau: '#2ecc71' }[stt] : '#333333');
     }
     // kamera
     const dark = sky(t);
     const low = mode === 'belakang', sp = S.v / S.vMax;
     const back = low ? 210 : 190 + sp * 50, up = low ? 98 : 420 + sp * 40, ahead = low ? 430 : 230;
-    const lat = low ? (S.x - 180) * 0.9 : (S.x - 180) * 0.45 - 34;
+    // kamera atas sedikit menoleh ke landmark yang sedang dilewati supaya bangunannya terlihat
+    let bias = 0;
+    if (!low) for (const L of Wd.landmarks) { const k = Math.max(0, 1 - Math.abs(L.d - d - 120) / 520); bias += k * (L.side < 0 ? -95 : 85); }
+    const lat = low ? (S.x - 180) * 0.9 : (S.x - 180) * 0.45 - 34 + bias;
     const cp = P(d - back, lat, up), lk = P(d + ahead, low ? (S.x - 180) * 0.6 : lat * 0.7, low ? 24 : 0);
     if (!camPos || dt === 0 || Math.hypot(cp[0] - camPos[0], cp[2] - camPos[2]) > 500) { camPos = cp.slice(); camLook = lk.slice(); }
     const f = 1 - Math.exp(-dt * 7);

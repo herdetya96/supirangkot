@@ -6,7 +6,7 @@
   "scripts": {
     "sim": "node sim.js",
     "drive": "node drivebot.js",
-    "assets": "python3 tools/blender/build_assets.py assets/models",
+    "assets": "python3 tools/blender/build_assets.py assets/models && node tools/pack_models.js",
     "serve": "python3 -m http.server 5173"
   }
 }

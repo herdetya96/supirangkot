@@ -26,6 +26,7 @@ Tidak ada build step. Satu-satunya pustaka, three.js r128 untuk tampilan 3D, dis
 | `vendor/three.min.js`, `vendor/GLTFLoader.js` | three.js r128 dan pemuat glTF-nya (lisensi MIT di `vendor/THREE-LICENSE`) |
 | `tools/blender/build_assets.py` | Skrip Blender yang memodelkan semua aset 3D |
 | `assets/models/*.glb` | Hasil ekspor skrip Blender: kendaraan, orang, bangunan, perabot jalan |
+| `assets/models.js` | Semua `.glb` dibungkus base64 (dibuat `tools/pack_models.js`) |
 | `drivebot.js` | Bot sopir untuk menyeimbangkan mini-game nyetir |
 | `sim.js` | Bot yang memainkan ratusan permainan untuk menguji keseimbangan |
 | `angkot.webp` | Render angkot dari model Blender |

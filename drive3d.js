@@ -29,8 +29,19 @@ function loadAssets() {
   if (!T || !T.GLTFLoader) { AS.state = 'gagal'; return (AS.promise = Promise.resolve(false)); }
   AS.state = 'memuat';
   const loader = new T.GLTFLoader();
-  const one = n => new Promise(res => loader.load(AS.base + n + '.glb', g => { try { AS.geo[n] = extract(g); res(true); } catch (e) { res(false); } }, undefined, () => res(false)));
-  AS.promise = Promise.all(ASSET_NAMES.map(one)).then(r => { AS.state = r.every(Boolean) ? 'siap' : 'gagal'; return AS.state === 'siap'; });
+  // semua model dibungkus base64 di assets/models.js (lihat tools/pack_models.js); kalau tidak ada, ambil .glb satu per satu
+  const bundle = () => new Promise(res => {
+    if (root.NARIK_GLB) { res(true); return; }
+    const sc = document.createElement('script'); sc.src = 'assets/models.js'; sc.async = true;
+    sc.onload = () => res(!!root.NARIK_GLB); sc.onerror = () => res(false); document.head.appendChild(sc);
+  });
+  const ok = (n, res) => g => { try { AS.geo[n] = extract(g); res(true); } catch (e) { res(false); } };
+  const one = n => new Promise(res => {
+    const b64 = root.NARIK_GLB && root.NARIK_GLB[n];
+    if (b64) { try { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); loader.parse(u.buffer, '', ok(n, res), () => res(false)); } catch (e) { res(false); } }
+    else loader.load(AS.base + n + '.glb', ok(n, res), undefined, () => res(false));
+  });
+  AS.promise = bundle().then(() => Promise.all(ASSET_NAMES.map(one))).then(r => { AS.state = r.every(Boolean) ? 'siap' : 'gagal'; return AS.state === 'siap'; });
   return AS.promise;
 }
 function extract(gltf) {

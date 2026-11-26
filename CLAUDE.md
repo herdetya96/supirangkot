@@ -10,7 +10,9 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 - `npm run drive` menjalankan `drivebot.js`: dua bot sopir memainkan mini-game nyetir 200 kali. Jalankan setiap kali `drive.js` atau `G.DRIVE` diubah.
 - `npm run assets` membuat ulang model 3D di `assets/models/*.glb` dari `tools/blender/build_assets.py`.
   Butuh Blender sebagai modul Python (`pip install bpy`, Blender 4.2+; dibuat dengan bpy 5.3.0, Python 3.13).
-  Hasil `.glb` ikut di-commit, jadi game tidak butuh Blender untuk jalan.
+  Hasil `.glb` ikut di-commit, jadi game tidak butuh Blender untuk jalan. Setelah itu `tools/pack_models.js` membungkus semua
+  `.glb` jadi `assets/models.js` (base64, ±1,3 MB) karena halaman artifact tidak menyajikan `.glb`; `drive3d.js` memuat
+  bundel itu saat 3D pertama dipakai, dan baru mencoba file `.glb` satu per satu kalau bundelnya tidak ada.
 
 ## Arsitektur
 

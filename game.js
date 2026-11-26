@@ -378,7 +378,7 @@ function driveShift(s, a, sh, D, res, mandor) {
   if (D.mogok) { cond(a, 8); cash(s, -150, 'Perbaikan'); res.down = true; n.push(`${a.name} mogok, derek Rp 150 rb.`); }
   if (D.severe) { cash(s, -50 * D.severe, 'Perbaikan'); rep(s, -D.severe); n.push(`Nabrak ${D.severe}×, ganti rugi ${G.fmt(50 * D.severe)}.`); }
   else if (D.hits) n.push(`Nyerempet ${D.hits}×.`);
-  if (D.skids) n.push(`Kebablasan di tikungan ${D.skids}×.`);
+  if (D.skids) n.push(`Kebablasan di persimpangan ${D.skids}×.`);
   if (D.tilang) { cash(s, -75 * D.tilang, 'Surat & denda'); n.push(D.merah ? `Terobos lampu merah, ditilang ${G.fmt(75 * D.tilang)}.` : `Ditilang ${G.fmt(75 * D.tilang)}.`); }
   if (D.missed) { rep(s, -0.4 * D.missed); n.push(`${D.missed} penumpang kelewatan turun.`); }
   if (D.stolen) n.push(`${D.stolen} diserobot angkot biru.`);

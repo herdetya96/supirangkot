@@ -919,7 +919,7 @@ function mount(host, spec, opts, done) {
     if (R.missed) lines.push(`${R.missed} penumpang kelewatan turun dan tidak mau bayar.`);
     if (R.stolen) lines.push(`${R.stolen} penumpang diserobot angkot biru.`);
     if (R.hits) lines.push(`Nyerempet atau nabrak ${R.hits}×${R.severe ? `, ${R.severe} parah` : ''}.`);
-    if (R.skids) lines.push(`Kebablasan di tikungan ${R.skids}×.`);
+    if (R.skids) lines.push(`Kebablasan di persimpangan ${R.skids}×.`);
     if (R.potholes) lines.push(`Masuk lubang ${R.potholes}×.`);
     if (R.merah) lines.push(`Menerobos lampu merah atau palang ${R.merah}×.`);
     if (R.tilang - R.merah > 0) lines.push('Kena tilang karena ngebut.');

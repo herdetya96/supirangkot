@@ -16,6 +16,10 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   jadi format ringkas sendiri (posisi uint16 terkuantisasi, normal int8, warna+jenis material uint8×4, ±13 byte per titik)
   di `assets/models.js` (±2,8 MB, ±0,7 MB terkompresi). `drive3d.js` memuatnya saat 3D pertama dipakai; GLTFLoader tidak dipakai.
 
+- `npm run karakter` membuat ulang empat karakter detail tinggi di `art/karakter/` (`tools/blender/karakter/build.py`, ±3 menit
+  per karakter). Butuh `pip install bpy scipy` dan data MakeHuman dari `sh tools/blender/karakter/ambil_data.sh` (±90 MB,
+  masuk `tools/blender/karakter/data/`, tidak di-commit). Ini aset seni, terpisah dari `npm run assets`.
+
 ## Arsitektur
 
 - `game.js` = semua aturan main, tanpa DOM. Diekspor sebagai `window.NARIK` dan `module.exports`.
@@ -56,6 +60,11 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   terbuka berkaca. Kalau aset gagal dimuat, bentuk kotak lama dipakai. Kampung jauh di belakang tetap kotak sederhana.
   Isi jalan (penumpang, motor, angkot biru, lubang, polisi, mogok) dibuat `G.driveSpec` dari seed game, jadi tetap aturan main di `game.js`.
   Hasilnya dikirim balik ke `G.runShift(s, sh, 'setir', hasil)`, yang mengubahnya jadi uang, bensin, kondisi, denda, dan nama baik.
+- Karakter detail tinggi (`art/karakter/`, ±350 ribu poligon per tokoh): Mang Ujang, Haji Sobari, Teh Rina, Dimas. Bukan aset
+  game dan tidak dimuat `drive3d.js`; jangan taruh `.glb`-nya di `assets/models/` karena `tools/pack_models.js` membungkus
+  semua isi folder itu. `build.py` memakai mesh dasar MakeHuman (CC0), morf per tokoh di kamus `CHARS`, pose lewat bobot rig,
+  pakaian dari permukaan badan yang disimulasikan sebagai kain, dan rambut/alis/kumis/bulu mata sebagai helai Curves
+  (tidak ikut ke GLB). Catatan lengkap dan kekurangannya di `art/karakter/README.md`.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 

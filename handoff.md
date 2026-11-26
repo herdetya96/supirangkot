@@ -10,7 +10,7 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
   pengingat sistem. Semua commit sudah di-push.
   Belum ada PR; jangan buat PR kecuali diminta.
 - **Versi:** 0.9.0. Game bisa dimainkan dari Bab 1 sampai kartu "Bersambung" setelah Bab 3.
-- **Versi yang bisa dimainkan:** artifact https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ (versi 21), halaman privat
+- **Versi yang bisa dimainkan:** artifact https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ (versi 22), halaman privat
   milik pengguna. Setiap perubahan dipublikasikan ulang ke URL yang sama (lihat "Publikasi" di bawah).
 - **Bahasa:** pengguna menulis dalam bahasa Indonesia santai, jadi jawab juga dalam bahasa Indonesia. Teks di dalam game
   mengikuti "Gaya tulisan" di `CLAUDE.md`.
@@ -199,7 +199,7 @@ Satu rit penuh di Chromium headless lewat Playwright; butuh server jalan.
 
 Publikasikan `index.html` dengan peta file berikut ke URL yang sama: `game.js`, `ui.js`, `drive.js`, `suara.js`, `drive3d.js`, `rumah3d.js`,
 `vendor/three.min.js`, `assets/models.js`, `assets/img/detail.webp`, dan
-`assets/img/angkot-{hijau,biru,kuning,merah,ungu}.webp`, `assets/img/potret-{ujang,sobari,rina,dimas}.webp`. `vendor/GLTFLoader.js` sudah dihapus.
+`assets/img/angkot-{hijau,biru,kuning,merah,ungu}.webp`, `assets/img/potret-{ujang,sobari,rina,dimas}.webp`, `assets/models_hd.js` (mode Ultra). `vendor/GLTFLoader.js` sudah dihapus.
 
 Kalau sesi baru belum pernah membaca artifact itu, baca dulu (action `read`), lalu publikasikan dengan `url`
 https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ.

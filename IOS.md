@@ -16,7 +16,7 @@ three.js), berjalan di WKWebView di dalam aplikasi. Proyek Xcode ada di `ios/` (
 
 ## Membuat dan menjalankan (butuh Mac)
 
-Dibutuhkan macOS dengan Xcode 16 atau lebih baru dan Node 20+. Untuk memasang di iPhone sendiri cukup Apple ID gratis;
+Dibutuhkan macOS dengan Xcode 16 atau lebih baru dan Node 22+ (syarat Capacitor 8). Untuk memasang di iPhone sendiri cukup Apple ID gratis;
 untuk TestFlight/App Store perlu Apple Developer Program.
 
 ```
@@ -29,6 +29,20 @@ Di Xcode: pilih target **App** → Signing & Capabilities → pilih Team (Apple 
 Bundle ID bawaan `id.cibening.narik` (ubah di `capacitor.config.json` dan Xcode kalau sudah dipakai).
 
 Setiap kali kode game berubah: `npm run ios` lalu Run lagi di Xcode.
+
+## Mencoba di Simulator (tanpa iPhone, tanpa akun Apple)
+
+```
+git clone --branch claude/friendly-newton-kqcq7z --single-branch https://github.com/herdetya96/supirangkot.git
+cd supirangkot
+npm install
+npm run ios
+npx cap run ios        # pilih simulator iPhone dari daftar; atau buka Xcode: npx cap open ios
+```
+
+Simulator tidak butuh Signing. Kalau daftar simulator kosong, pasang runtime iOS di Xcode → Settings → Components.
+Getar (Haptics) tidak terasa di Simulator. Untuk melihat error JavaScript: Safari → Settings → Advanced → Show features for
+web developers, lalu menu Develop → Simulator → Narik.
 
 ## Paket model HD
 

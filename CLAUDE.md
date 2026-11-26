@@ -97,7 +97,9 @@ ditahan tidak menutupnya.
   yang kelewatan tidak bayar.
 - Lampu merah: siklus 16 dtk (hijau 11, kuning 1,5, merah 3,5). Palang kereta: 22 dtk, tertutup 6,5 dtk. Menerobos = tilang
   Rp 75 rb. Saat merah ada mobil melintas, dan saat palang tertutup kereta lewat; ditabrak = ganti rugi.
-- Tikungan: di atas 235 (90% saat hujan) angkot terlempar ke luar; menyentuh tepi = "kebablasan" (kondisi −1, laju turun).
+- Tikungan: jalan selalu membelokkan angkot sendiri, di laju berapa pun; setir hanya untuk pindah lajur. Di atas 235 (90% saat hujan)
+  angkot menumpuk selip (kelebihan laju × detik): "Ban berdecit!" di 35%, kebablasan di `SLIDE_MAX` 40 (kondisi −1, laju ×0,55).
+  Tidak ada dorongan ke samping (dulu ada, dan pemain kadang harus membelokkan manual, kadang tidak).
 - Kendaraan searah (motor, mobil, pikap, truk, angkot biru) ikut berhenti di lampu merah dan di belakang kendaraan lain.
   Kendaraan arah berlawanan hanya hiasan.
 - Tarif per penumpang = pendapatan rit dasar × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (12,5).
@@ -108,10 +110,10 @@ Hasil `drivebot.js` (200 rit, tiga trayek), dibanding pendapatan mode "Narik bia
 | Bot | Ongkos | Naik | Serempet | Kebablasan | Kelewatan | Tilang |
 |---|---|---|---|---|---|---|
 | Rapi (patuh lampu, pelan di tikungan, berhenti untuk "kiri") | 1,10× | 13,5 | 0,9 | 0 | 0 | 0 |
-| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,76× | 15,2 | 3,1 | 5,1 | 5,8 | 0,4 |
-| Nekat (rapi tapi terobos lampu, ngebut di tikungan) | 1,17× kotor | 14,6 | 1,7 | 4,6 | 0,3 | 1,0 |
+| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,80× | 15,6 | 2,7 | 6,6 | 5,7 | 0,3 |
+| Nekat (rapi tapi terobos lampu, ngebut di tikungan) | 1,24× kotor | 15,1 | 1,3 | 5,6 | 0 | 1,1 |
 
-Nekat dapat ongkos kotor lebih besar, tapi tilang (±Rp 75 rb) dan ganti rugi tabrakan membuatnya rugi bersih.
+Nekat dapat ongkos kotor ±Rp 13 rb lebih besar, tapi tilang (±Rp 75 rb per kejadian) dan ganti rugi tabrakan membuatnya rugi bersih.
 Bot belum pernah diuji melawan tangan manusia di HP.
 
 ## Pilar desain

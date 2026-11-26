@@ -9,6 +9,9 @@ const W = 360, ROAD_L = 70, ROAD_R = 290, LANES = [106, 180, 254], CURB_X = 128;
 const PW = 44, PL = 84;
 const ACC = 170, BRAKE = 540, COAST = 75, LAT = 380, STOP_V = 30, CORNER_V = 235;
 // mundur: laju maksimum dan percepatan. Setir pemain: laju geser lateral ikut laju maju (STEER_*), dan berubah bertahap (STEER_R).
+// tikungan: jalan selalu membelokkan angkot sendiri. Terlalu kencang menumpuk 'selip' (kelebihan laju × detik);
+// lewat SLIDE_MAX = kebablasan. Tidak ada dorongan ke samping, jadi pemain tidak pernah perlu membelokkan manual.
+const SLIDE_MAX = 40;
 const V_REV = 90, ACC_REV = 110, STEER_MIN = 26, STEER_K = 0.32, STEER_MAX = 120, STEER_R = 420, YAW_MAX = 0.2;
 const KIND = { motor: { w: 16, l: 34 }, mobil: { w: 34, l: 66 }, pikap: { w: 36, l: 76 }, truk: { w: 44, l: 118 } };
 const STEP = 8, DMIN = -1000, DMAX = 17000, TURN_R = 420;
@@ -110,7 +113,7 @@ class Sim {
     this.vMax = spec.vMax || 340; this.brakeK = spec.wet ? 0.6 : 1;
     this.riders = []; this.fares = 0; this.boarded = 0;
     this.hits = 0; this.severe = 0; this.potholes = 0; this.tilang = 0; this.missed = 0; this.stolen = 0; this.merah = 0; this.skids = 0;
-    this.cool = 0; this.shake = 0; this.stopT = 0; this.braking = false; this.over = false; this.mogok = false; this.deadT = 0; this.skidCool = 0;
+    this.cool = 0; this.shake = 0; this.stopT = 0; this.braking = false; this.over = false; this.mogok = false; this.deadT = 0; this.skidCool = 0; this.slide = 0;
     this.msgs = []; this.pops = []; this.crossers = [];
     const gaps = [...Wd.cross.map(c => c.d), Wd.river.d, Wd.rail.d];
     const nudge = d => { for (const g of gaps) if (Math.abs(d - g) < 115) return g + 125; return d; };
@@ -153,8 +156,10 @@ class Sim {
     const spd = Math.abs(this.v), x0 = this.x;
     // setir, plus terlempar keluar kalau menikung terlalu kencang
     const k = this.world.at(this.d).k, over = this.v - CORNER_V * (S.wet ? 0.9 : 1);
+    // skid hanya untuk tampilan (buntut angkot mengayun) dan peringatan; posisi lateral tidak didorong
     this.skid = k && over > 0 ? Math.sign(k) * over * 3.2 : 0;
-    const grip = (S.wet ? 0.85 : 1) * (this.skid ? 0.55 : 1);
+    this.slide = this.skid ? this.slide + over * dt : Math.max(0, this.slide - 30 * dt);
+    const grip = S.wet ? 0.85 : 1;
     if (inp.steer != null) {
       // setir dengan bantuan lajur: ditahan = bergeser, dilepas = meluncur ke tengah lajur terdekat searah belokan terakhir.
       // Sentuhan singkat cukup untuk pindah satu lajur. Angkot diam tidak bisa bergeser.
@@ -180,17 +185,18 @@ class Sim {
       }
       this.vx += clamp(want - this.vx, -STEER_R * dt, STEER_R * dt);
       if (!f) this.vx = 0;
-      this.steer = raw; this.x += this.vx * dt + this.skid * dt;
+      this.steer = raw; this.x += this.vx * dt;
     } else {
       if (inp.tx != null) this.tx = inp.tx;
       let tx = clamp(this.tx, ROAD_L + PW / 2, ROAD_R - PW / 2);
       if (S.wobble) tx += Math.sin(this.t * 1.7) * 22 * S.wobble;
       const dx = tx - this.x, lat = LAT * grip * dt;
-      this.x += (Math.abs(dx) < lat ? dx : Math.sign(dx) * lat) + this.skid * dt;
+      this.x += Math.abs(dx) < lat ? dx : Math.sign(dx) * lat;
     }
     const xmin = ROAD_L + PW / 2, xmax = ROAD_R - PW / 2;
-    if (this.skid && (this.x >= xmax || this.x <= xmin) && this.skidCool <= 0) {
-      this.skids++; this.v *= 0.55; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di tikungan!', 'bad');
+    if (this.skid && this.slide > SLIDE_MAX * 0.35) this.say('Ban berdecit! Rem!', 'bad');
+    if (this.slide >= SLIDE_MAX && this.skidCool <= 0) {
+      this.skids++; this.v *= 0.55; this.slide = 0; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di tikungan!', 'bad');
     }
     this.x = clamp(this.x, xmin, xmax);
     // arah hadap badan angkot dihitung dari gerak sebenarnya (geser ÷ maju), dihaluskan
@@ -758,7 +764,9 @@ function mount(host, spec, opts, done) {
         <li>Kelewatan penumpang? Ketuk <b>MUNDUR</b>, lalu tahan GAS untuk jalan mundur. Ketuk lagi (MAJU) untuk maju. Hati-hati, kendaraan di belakang bisa terserempet.</li>
         <li>Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, R mundur/maju, H klakson, C kamera.</li>
         <li>Orang melambai di trotoar: <b>menepi ke kotak kuning dan berhenti</b>.</li><li>Ada yang teriak <b>“Kiri!”</b>: menepi dan berhenti. Ongkos dibayar waktu turun. Kelewatan, dia tidak mau bayar.</li>
-        <li>Patuhi <b>lampu merah</b> dan <b>palang kereta</b>. Pelan di tikungan, nanti kebablasan.</li>
+        <li>Angkot <b>selalu berbelok sendiri</b> mengikuti jalan. Setir hanya untuk pindah lajur.</li>
+        <li>Tikungan terlalu kencang: ban berdecit, lalu <b>kebablasan</b>. Rem begitu dengar decit.</li>
+        <li>Patuhi <b>lampu merah</b> dan <b>palang kereta</b>.</li>
         <li>Awas motor, mobil, lubang, dan polisi. Angkot biru suka menyerobot penumpang.</li></ul>
         ${spec.wet ? '<p><b>Hujan:</b> rem licin, penumpang lebih banyak.</p>' : ''}${spec.wobble ? '<p><b>Kamu ngantuk:</b> setir agak goyang.</p>' : ''}${spec.sh === 2 ? '<p><b>Sore:</b> makin lama makin gelap.</p>' : ''}
         <p>Tarif ±Rp ${spec.tarif} rb per penumpang.</p>

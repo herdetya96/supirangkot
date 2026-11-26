@@ -650,7 +650,8 @@ function createImpl(canvas, S, spec, o) {
   // angkot pemain
   const me = mk(hasAsset('angkot_' + spec.route) ? 'angkot_' + spec.route : 'angkot', o.hex);
   const brakeMat = new T.MeshBasicMaterial({ color: C('#5a1410').clone() }); mats.push(brakeMat);
-  if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); } }
+  const revMat = new T.MeshBasicMaterial({ color: C('#3a3a34').clone() }); mats.push(revMat);
+  if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); const r = new T.Mesh(new T.BoxGeometry(3.4, 5, 1), revMat); r.position.set(sx * 14, 21.5, 42.6); me.add(r); } }
   else { const brake = new T.Mesh(new T.BoxGeometry(40, 5, 1.5), brakeMat); brake.position.set(0, 16.5, 43.2); me.add(brake); }
   // kendaraan lain
   const cars = S.cars.map(m => ({ o: m, mesh: m.kind === 'motor' ? mk('motor', ...motorCols(m.hue)) : mk(m.kind, A.CARC[m.hue % 8]) }));
@@ -744,9 +745,10 @@ function createImpl(canvas, S, spec, o) {
   function render(dt, mode) {
     const d = S.d, t = S.t, pc = Wd.at(d), dA = d - 600, dB = d + 2700;
     // pemain
-    const yaw = Math.max(-0.18, Math.min(0.18, (S.tx - S.x) / 600)) * Math.min(1, S.v / 120) + (S.skid ? Math.sign(S.skid) * 0.12 : 0);
-    put(me, d, S.x - 180, 0, -yaw); me.rotation.x = S.braking && S.v > 40 ? 0.025 : 0;
-    brakeMat.color.copy(C(S.braking || S.v < 5 ? '#ff3b2f' : '#5a1410'));
+    const yaw = S.yaw + (S.skid ? Math.sign(S.skid) * 0.12 : 0);
+    put(me, d, S.x - 180, 0, -yaw); me.rotation.x = S.braking && Math.abs(S.v) > 40 ? 0.025 * Math.sign(S.v) : 0;
+    brakeMat.color.copy(C(S.braking || Math.abs(S.v) < 5 ? '#ff3b2f' : '#5a1410'));
+    revMat.color.copy(C(S.rev ? '#fffbe6' : '#3a3a34'));
     // kendaraan
     for (const c of cars) { const vis = c.o.d > dA && c.o.d < dB; c.mesh.visible = vis; if (vis) put(c.mesh, c.o.d, c.o.x - 180, 0); }
     for (const c of birus) { const vis = c.o.d > dA && c.o.d < dB; c.mesh.visible = vis; if (vis) put(c.mesh, c.o.d, c.o.x - 180, 0); }
@@ -790,7 +792,7 @@ function createImpl(canvas, S, spec, o) {
     }
     // kamera
     const dark = sky(t);
-    const low = mode === 'belakang', sp = S.v / S.vMax;
+    const low = mode === 'belakang', sp = Math.abs(S.v) / S.vMax;
     const back = low ? 210 : 190 + sp * 50, up = low ? 98 : 420 + sp * 40, ahead = low ? 430 : 230;
     // kamera atas sedikit menoleh ke landmark yang sedang dilewati supaya bangunannya terlihat
     let bias = 0;

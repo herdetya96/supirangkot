@@ -16,6 +16,11 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   Acak memakai `rng(s)` berbasis `s.seed`, jadi satu seed = satu jalan cerita yang bisa diulang.
 - `ui.js` = render ulang penuh ke `#v` lewat template string, aksi lewat `data-act`. Tidak boleh berisi aturan main.
 - `drive.js` = mini-game nyetir (`window.NARIK_DRIVE`). `Sim` adalah fisika murni tanpa DOM, `mount` memasang canvas dan kontrol ke `#ny`.
+  Juga berisi peta 2D (`draw`) dan HUD bersama (`drawHUD`, menerima `proj(d, x)` → titik layar).
+- `drive3d.js` = tampilan 3D (`window.NARIK_3D`) memakai three.js r128 di `vendor/three.min.js` (MIT, `vendor/THREE-LICENSE`).
+  Hanya menggambar: dunia statis per trayek dibangun sekali (`buildStatic`, jalan sebagai pita berwarna per titik, bangunan dan pohon
+  lewat `InstancedMesh`), lalu tiap frame memindahkan kendaraan, orang, lampu, kamera. Satu `WebGLRenderer` dipakai ulang antar rit.
+  Kalau three.js atau WebGL tidak ada, `mount` otomatis memakai peta 2D.
   Isi jalan (penumpang, motor, angkot biru, lubang, polisi, mogok) dibuat `G.driveSpec` dari seed game, jadi tetap aturan main di `game.js`.
   Hasilnya dikirim balik ke `G.runShift(s, sh, 'setir', hasil)`, yang mengubahnya jadi uang, bensin, kondisi, denda, dan nama baik.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
@@ -34,7 +39,10 @@ Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik 
 ## Mini-game nyetir
 
 Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
-60 detik di kota Cibening, tampak atas, kamera ikut berputar di tikungan dan menjauh saat ngebut.
+60 detik di kota Cibening. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
+`localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Setir jari memakai posisi angkot di layar
+(`o.psx`, `o.ppu`), jadi sama untuk ketiganya. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat
+waktu rit tetap sama dengan waktu nyata.
 
 - Peta: `buildWorld(trayek)` membuat rute tetap per trayek dari seed nomor trayek (sama setiap main):
   ruas lurus dan tikungan 90° bergantian, 10–12 perempatan (sekitar 60% berlampu merah), satu sungai dengan jembatan,
@@ -116,6 +124,8 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
 - Peta masih skematis; sprite angkot cuma satu sudut dan warna lain memakai filter CSS.
 - Belum ada tes unit; `sim.js` dan `drivebot.js` satu-satunya jaring pengaman.
 - Mini-game nyetir belum punya suara, getar, atau tutorial bertahap; penjelasannya hanya kartu sebelum rit.
+- Tampilan 3D belum pernah diukur di HP sungguhan. Di Chromium headless (WebGL perangkat lunak) sekitar 10 fps;
+  dunia statis trayek dibangun ±150 ms. Belum ada pilihan kualitas grafis.
 
 ## Gaya tulisan
 

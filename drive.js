@@ -649,11 +649,17 @@ function draw(c, S, H, o) {
     }
   }
   if (o.wet) { c.strokeStyle = 'rgba(200,220,255,.35)'; c.lineWidth = 1; c.beginPath(); for (let i = 0; i < 60; i++) { const x = (hash(i * 13) % W), y = ((hash(i * 7) % H) + t * 700 + i * 37) % H; c.moveTo(x, y); c.lineTo(x - 3, y + 12); } c.stroke(); }
-  // gelembung kiri dan uang melayang
-  const [psx, psy] = toScreen(...Wd.pt(d, S.x - 180));
+  const [qx] = toScreen(...Wd.pt(d, S.x - 180)); o.psx = qx; o.ppu = Z;
+  drawHUD(c, S, H, o, (dd, xx) => toScreen(...Wd.pt(dd, xx - 180)));
+}
+
+/* HUD di atas peta 2D maupun 3D. proj(d, x) memetakan titik jalan ke layar logis. */
+function drawHUD(c, S, H, o, proj) {
+  const Wd = S.world, sc = buildScenery(Wd), d = S.d, t = S.t, cam = Wd.at(d);
+  const [psx, psy] = proj(d, S.x);
   const kiri = S.kiriCount();
   if (kiri) { const blink = Math.floor(t * 4) % 2; c.fillStyle = blink ? '#ffd400' : '#fff'; c.strokeStyle = '#111'; c.lineWidth = 2; rr(c, psx - 38, psy - 86, 76, 26, 8); c.fill(); c.stroke(); txt(c, `KIRI! ×${kiri}`, psx, psy - 73, 14, '#111'); }
-  for (const p of S.pops) { const [sx2, sy2] = toScreen(...Wd.pt(p.d, p.x - 180)); c.globalAlpha = 1 - p.t / 1.2; txt(c, p.text, sx2 + 40, sy2 - 50 - p.t * 50, 18, p.good ? '#1f9d55' : '#d33'); c.globalAlpha = 1; }
+  for (const p of S.pops) { const [sx2, sy2] = proj(p.d, p.x); c.globalAlpha = 1 - p.t / 1.2; txt(c, p.text, sx2 + 40, sy2 - 50 - p.t * 50, 18, p.good ? '#1f9d55' : '#d33'); c.globalAlpha = 1; }
   // HUD
   const left = Math.max(0, Math.ceil(S.spec.dur - t));
   c.fillStyle = 'rgba(17,24,30,.85)'; c.fillRect(0, 0, W, 52);
@@ -683,11 +689,17 @@ function draw(c, S, H, o) {
 }
 
 /* ---------- pasang di halaman ---------- */
+const CAMS = { atas: 'Kamera atas', belakang: 'Kamera belakang', '2d': 'Peta 2D' };
+function camLoad() { try { return localStorage.getItem('narik-kamera'); } catch (e) { return null; } }
+function camSave(v) { try { localStorage.setItem('narik-kamera', v); } catch (e) { /* tanpa penyimpanan tetap jalan */ } }
 function mount(host, spec, opts, done) {
   const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const Wd = buildWorld(spec.route), stops = Wd.landmarks.map(l => l.name);
+  const R3 = root.NARIK_3D && root.NARIK_3D.available() ? root.NARIK_3D : null;
+  const modes = R3 ? ['atas', 'belakang', '2d'] : ['2d'];
+  let mode = modes.includes(camLoad()) ? camLoad() : modes[0];
   host.innerHTML = `<div class="nyetir" role="application" aria-label="Nyetir angkot">
-    <div class="ny-kanvas"><canvas></canvas>
+    <div class="ny-kanvas"><canvas class="ny-hud"></canvas>
       <div class="ny-lapis" data-ny="intro"><div class="ny-kartu"><span class="eyebrow">Rit ${esc(opts.shiftName)} · Trayek ${esc(spec.route)}</span><h2>${esc(stops[0])} → ${esc(stops[stops.length - 1])}</h2>
         <p class="ny-rute">${stops.map(esc).join(' · ')}</p>
         <ul><li><b>Geser jari</b> kiri-kanan untuk setir. Di keyboard: panah dan spasi.</li><li>Tahan <b>REM</b>. Lepas, angkot jalan sendiri.</li>
@@ -698,32 +710,43 @@ function mount(host, spec, opts, done) {
         <p>Tarif ±Rp ${spec.tarif} rb per penumpang.</p>
         <button class="gas" data-ny="go">Gas!</button><button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
     </div>
-    <div class="ny-kontrol"><p>Geser jari di jalan untuk setir</p><button class="rem" data-ny="rem" aria-label="Rem">REM</button></div></div>`;
-  const root = host.firstElementChild, cv = root.querySelector('canvas'), box = root.querySelector('.ny-kanvas'), c = cv.getContext('2d');
+    <div class="ny-kontrol">${modes.length > 1 ? `<button class="ny-kam" data-ny="kam" aria-label="Ganti kamera">🎥 <span>${CAMS[mode]}</span></button>` : '<p>Geser jari di jalan untuk setir</p>'}<button class="rem" data-ny="rem" aria-label="Rem">REM</button></div></div>`;
+  const root2 = host.firstElementChild, cv = root2.querySelector('canvas.ny-hud'), box = root2.querySelector('.ny-kanvas'), c = cv.getContext('2d');
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const S = new Sim(spec); let H = 640, k = 1, raf = 0, last = 0, running = false, closed = false;
   const inp = { tx: null, brake: false }, keys = {};
-  let remDown = false, steering = false;
+  let remDown = false, steering = false, r3 = null;
+  const o = { hex: opts.hex, route: spec.route, wet: spec.wet, sh: spec.sh, reduce, routeCol: opts.routeCol, zoom: Z_STOP, psx: W / 2, ppu: Z_STOP, cam: mode };
+  if (R3) { try { r3 = R3.create(box, S, spec, o); } catch (e) { r3 = null; mode = '2d'; o.cam = '2d'; } }
+  const dpr = () => Math.min(2, window.devicePixelRatio || 1);
   function size() {
-    const r = box.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const r = box.getBoundingClientRect();
     k = r.width / W; H = Math.max(420, Math.round(r.height / k));
-    cv.width = Math.round(r.width * dpr); cv.height = Math.round(H * k * dpr); cv.style.width = r.width + 'px'; cv.style.height = (H * k) + 'px';
-    c.setTransform(k * dpr, 0, 0, k * dpr, 0, 0);
+    cv.width = Math.round(r.width * dpr()); cv.height = Math.round(H * k * dpr()); cv.style.width = r.width + 'px'; cv.style.height = (H * k) + 'px';
+    if (r3) r3.resize(r.width, H * k, W, H);
   }
-  const o = { hex: opts.hex, route: spec.route, wet: spec.wet, sh: spec.sh, reduce, routeCol: opts.routeCol, zoom: Z_STOP };
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
+    // HP lambat: fisika tetap memakai langkah kecil supaya waktu rit sama dengan waktu nyata
+    const dt = Math.min(0.25, (now - last) / 1000 || 0); last = now;
     if (keys.l || keys.r) inp.tx = S.x + (keys.r ? 70 : 0) - (keys.l ? 70 : 0);
     inp.brake = keys.b || remDown;
-    if (running) S.step(dt, inp);
+    if (running) for (let left = dt; left > 1e-6 && !S.over; left -= 0.05) S.step(Math.min(0.05, left), inp);
     o.zoom += (Z_STOP - (Z_STOP - Z_FAST) * S.v / S.vMax - o.zoom) * Math.min(1, dt * 1.5);
-    c.setTransform(k * Math.min(2, window.devicePixelRatio || 1), 0, 0, k * Math.min(2, window.devicePixelRatio || 1), 0, 0);
-    draw(c, S, H, o);
+    c.setTransform(k * dpr(), 0, 0, k * dpr(), 0, 0);
+    if (r3 && mode !== '2d') {
+      r3.canvas.style.visibility = 'visible';
+      r3.render(dt, mode);
+      c.clearRect(0, 0, W, H);
+      drawHUD(c, S, H, o, r3.proj);
+    } else {
+      if (r3) r3.canvas.style.visibility = 'hidden';
+      draw(c, S, H, o);
+    }
     if (S.over && running) { running = false; end(); }
     if (!closed) raf = requestAnimationFrame(frame);
   }
   function end() {
-    const R = S.result(), L = root.querySelector('.ny-lapis');
+    const R = S.result(), L = root2.querySelector('.ny-lapis');
     const lines = [`${R.riders} penumpang naik. Ongkos terkumpul <b>Rp ${R.fares} rb</b>.`];
     if (S.endPay) lines.push(`Sisa penumpang turun di akhir rit: Rp ${Math.round(S.endPay)} rb.`);
     if (R.missed) lines.push(`${R.missed} penumpang kelewatan turun dan tidak mau bayar.`);
@@ -738,33 +761,37 @@ function mount(host, spec, opts, done) {
     L.innerHTML = `<div class="ny-kartu"><span class="eyebrow">${R.mogok ? 'Mogok' : 'Rit selesai'}</span><h2>${R.mogok ? 'Mesin mati' : R.sampai ? 'Sampai ' + esc(dest) : 'Belum sampai ' + esc(dest)}</h2><ul>${lines.map(x => `<li>${x}</li>`).join('')}</ul><button class="gas" data-ny="done">Lanjut</button></div>`;
     L.hidden = false; L.querySelector('button').focus();
   }
-  function close(res) { closed = true; cancelAnimationFrame(raf); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', size); host.innerHTML = ''; done(res); }
-  const lx = e => { const r = cv.getBoundingClientRect(); return 180 + CAM_U + ((e.clientX - r.left) / k - W / 2) / o.zoom; };
+  function close(res) { closed = true; cancelAnimationFrame(raf); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', size); if (r3) r3.detach(); host.innerHTML = ''; done(res); }
+  // jari menunjuk posisi lateral angkot di baris layar tempat angkot berada
+  const lx = e => { const r = cv.getBoundingClientRect(); return S.x + ((e.clientX - r.left) / k - o.psx) / (o.ppu || 1); };
   cv.addEventListener('pointerdown', e => { steering = true; inp.tx = lx(e); cv.setPointerCapture(e.pointerId); });
   cv.addEventListener('pointermove', e => { if (steering) inp.tx = lx(e); });
   const up = () => { steering = false; };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  const rem = root.querySelector('[data-ny="rem"]');
+  const rem = root2.querySelector('[data-ny="rem"]');
   rem.addEventListener('pointerdown', e => { remDown = true; rem.classList.add('on'); rem.setPointerCapture(e.pointerId); e.preventDefault(); });
   const remUp = () => { remDown = false; rem.classList.remove('on'); };
   rem.addEventListener('pointerup', remUp); rem.addEventListener('pointercancel', remUp); rem.addEventListener('lostpointercapture', remUp);
   rem.addEventListener('contextmenu', e => e.preventDefault());
   const KM = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r', ' ': 'b', ArrowDown: 'b', s: 'b', S: 'b' };
-  function kd(e) { const m = KM[e.key]; if (m && running) { keys[m] = true; e.preventDefault(); } }
+  function kd(e) { const m = KM[e.key]; if (m && running) { keys[m] = true; e.preventDefault(); } if ((e.key === 'c' || e.key === 'C') && modes.length > 1) cycle(); }
   function ku(e) { const m = KM[e.key]; if (m) { keys[m] = false; if (m !== 'b') inp.tx = S.x; } }
+  function cycle() { mode = modes[(modes.indexOf(mode) + 1) % modes.length]; o.cam = mode; camSave(mode); const lb = root2.querySelector('.ny-kam span'); if (lb) lb.textContent = CAMS[mode]; }
   window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('resize', size);
-  root.addEventListener('click', e => {
+  root2.addEventListener('click', e => {
     const b = e.target.closest('[data-ny]'); if (!b) return; const a = b.dataset.ny;
     if (a === 'go') { b.closest('.ny-lapis').hidden = true; running = true; }
     if (a === 'auto') close(null);
     if (a === 'done') close(S.result());
+    if (a === 'kam') cycle();
   });
   size(); raf = requestAnimationFrame(t => { last = t; frame(t); });
-  root.querySelector('[data-ny="go"]').focus();
-  return { sim: S };
+  root2.querySelector('[data-ny="go"]').focus();
+  return { sim: S, get mode() { return mode; }, cycle };
 }
 
-const API = { Sim, mount, buildWorld, LANES, CURB_X, W, PL, CORNER_V, BRAKE };
+const API = { Sim, mount, buildWorld, LANES, CURB_X, W, PL, PW, CORNER_V, BRAKE,
+  _: { buildScenery, cellAt, hash, mulberry, clamp, SHOPS, ROOF, WALLC, CARC, SHIRT, SKIN, KIND, DMIN, ROAD_L, ROAD_R } };
 root.NARIK_DRIVE = API;
 if (typeof module !== 'undefined') module.exports = API;
 })(typeof window !== 'undefined' ? window : globalThis);

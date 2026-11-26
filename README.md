@@ -11,7 +11,7 @@ npm run sim       # simulasi keseimbangan ekonomi (300 permainan per strategi)
 npm run drive     # bot sopir memainkan mini-game nyetir
 ```
 
-Tidak ada build step dan tidak ada dependensi.
+Tidak ada build step. Satu-satunya pustaka, three.js r128 untuk tampilan 3D, disimpan di `vendor/`.
 
 ## Isi
 
@@ -20,7 +20,9 @@ Tidak ada build step dan tidak ada dependensi.
 | `index.html` | Kerangka halaman dan seluruh CSS |
 | `game.js` | Mesin game: ekonomi, sopir, trayek, kejadian, cerita. Logika murni, jalan juga di Node |
 | `ui.js` | Tampilan dan interaksi. Tidak menyimpan aturan main |
-| `drive.js` | Mini-game nyetir: fisika jalan dan gambar canvas |
+| `drive.js` | Mini-game nyetir: fisika jalan, peta 2D, HUD |
+| `drive3d.js` | Tampilan 3D mini-game nyetir (three.js) |
+| `vendor/three.min.js` | three.js r128 (lisensi MIT di `vendor/THREE-LICENSE`) |
 | `drivebot.js` | Bot sopir untuk menyeimbangkan mini-game nyetir |
 | `sim.js` | Bot yang memainkan ratusan permainan untuk menguji keseimbangan |
 | `angkot.webp` | Render angkot dari model Blender |

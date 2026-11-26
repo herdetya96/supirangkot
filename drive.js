@@ -206,8 +206,15 @@ class Sim {
         return -kEff - this.psi * 2.4 / (sgnV * vv) - (this.x - xRef) * 3 / (vv * vv);
       };
       if (this.rescue != null && (this.d > this.rescue || !kT)) this.rescue = null;
-      // BANTUAN BELOK: tahan tombol ke arah belokan (atau sesudah sekali kebablasan), angkot dibelokkan seperti sopir
-      this.assist = !!kT && (this.rescue != null || (Math.sign(raw) === -Math.sign(kT) && Math.abs(raw) > 0.2));
+      // BANTUAN BELOK: tahan tombol ke arah belokan (atau sesudah sekali kebablasan), angkot dibelokkan seperti sopir.
+      // Berlaku dari 200 unit sebelum mulut simpang (tekan lebih awal = angkot tetap di lajurnya sampai saatnya belok)
+      // sampai ±0,45 dtk sesudah keluar simpang kalau tombol masih ditahan (jempol telat melepas = tetap lurus di lajur).
+      // Ditahan lebih lama lagi = setir biasa (misalnya menepi ke trotoar sesudah belok kiri).
+      const jN = this.world.junctions.find(j => this.d > j.d0 - 200 && this.d < j.d1 + 500);
+      const toward = !!jN && Math.sign(raw) === -jN.dir && Math.abs(raw) > 0.2;
+      if (!toward || !jN || (this.d > jN.d1 && this.jLatch !== jN)) this.jLatch = toward && jN && this.d <= jN.d1 ? jN : null;
+      else if (this.d <= jN.d1) this.jLatch = jN;
+      this.assist = (!!kT && this.rescue != null) || (toward && (this.d <= jN.d1 || (this.jLatch === jN && this.d < jN.d1 + Math.max(60, spd * 0.45))));
       let cmd;
       if (this.assist) {
         if (this.refX == null) this.refX = LANES.reduce((b, l) => Math.abs(l - this.x) < Math.abs(b - this.x) ? l : b, LANES[0]);
@@ -228,11 +235,20 @@ class Sim {
       this.kapA += clamp(cmd - this.kapA, -kr, kr);
       const kLim = spd > 1 ? A_LAT * (S.wet ? 0.81 : 1) / (spd * spd) : K_MAX, kap = clamp(this.kapA, -kLim, kLim);
       this.under = Math.abs(this.kapA) > kLim * 1.02 && spd > 100 && !!kT;      // di jalan lurus batas belok tidak dihitung selip
-      // kelembaman badan: laju belok menyusul lengkung roda
-      this.yr += (this.v * kap - this.yr) * Math.min(1, dt / 0.12);
-      // di jalan lurus sudut hadap dibatasi; makin kencang makin kecil (pindah lajur di laju tinggi pakai sudut landai)
-      const pm = k ? 1.1 : clamp(0.45 * 110 / vv, 0.2, 0.45);
-      if (spd > 1) this.psi = clamp(this.psi + (this.yr + k * sf * this.v * Math.cos(this.psi)) * dt, -pm, pm);
+      // laju belok yang dituju badan angkot
+      let yrT = this.v * kap, lag = 0.12;
+      // di jalan lurus sudut hadap dibatasi; makin kencang makin kecil (pindah lajur di laju tinggi pakai sudut landai).
+      // Batasnya lunak: makin dekat batas, putaran ke luar makin pelan; lewat batas (misalnya keluar simpang) kembali pelan-pelan.
+      const pm = k ? 1.1 : clamp(0.45 * 110 / vv, 0.2, 0.45), ps = Math.sign(this.psi);
+      if (ps && Math.sign(yrT) === ps) yrT = ps * Math.min(Math.abs(yrT), (pm - Math.abs(this.psi)) * 5);
+      else if (ps && Math.abs(this.psi) > pm) yrT = ps * Math.min(ps * yrT, (pm - Math.abs(this.psi)) * 5);
+      // menempel di tepi jalan sambil masih mengarah ke luar: badan diluruskan dengan cepat tapi tetap berputar, tidak meloncat
+      const lvx = this.v * Math.sin(this.psi);
+      if ((this.x <= ROAD_L + PW / 2 + 0.5 && lvx < 0) || (this.x >= ROAD_R - PW / 2 - 0.5 && lvx > 0)) { yrT = -this.psi * 6; lag = 0.08; }
+      // kelembaman badan: laju belok menyusul
+      this.yr += (yrT - this.yr) * Math.min(1, dt / lag);
+      // arah hadap relatif jalan: berubah karena laju belok; perubahan arah jalan dikurangkan sesudah d maju (lihat bawah)
+      if (spd > 1) this.psi += this.yr * dt;
       else this.yr = 0;
       this.x += this.v * Math.sin(this.psi) * dt; this.fwd = Math.cos(this.psi);
       this.latA = this.v * this.yr;                 // percepatan ke samping, untuk badan miring di 3D
@@ -256,10 +272,8 @@ class Sim {
       const lv = this.v * Math.sin(this.psi), into = Math.abs(lv) > 45 && ((this.x <= xmin && lv < 0) || (this.x >= xmax && lv > 0));
       if (into) {
         if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di persimpangan!' : 'Nyenggol pinggir jalan!', 'bad'); this.fx('selip'); }
-        this.psi *= 0.3;
-        if (k) { const j = this.world.junctions.find(j => this.d >= j.d0 && this.d <= j.d1); if (j) { this.rescue = j.d1; this.psi = 0; this.yr = 0; this.kapA = 0; } }
+        if (k) { const j = this.world.junctions.find(j => this.d >= j.d0 && this.d <= j.d1); if (j) this.rescue = j.d1; }
       }
-      if ((this.x <= xmin && this.v * Math.sin(this.psi) < 0) || (this.x >= xmax && this.v * Math.sin(this.psi) > 0)) this.psi *= 0.5;
       this.x = clamp(this.x, xmin, xmax);
       this.yaw = this.psi;
     } else {
@@ -270,7 +284,10 @@ class Sim {
     }
     // buntut angkot mengayun waktu selip (hanya tampilan), dihaluskan supaya tidak tersentak
     this.slip += ((this.skid ? Math.sign(this.skid) * 0.12 : 0) - this.slip) * Math.min(1, dt * 5);
-    const prev = this.d; this.d = Math.max(-200, this.d + this.v * this.fwd * sf * dt);
+    const prev = this.d, aPrev = bebas ? this.world.at(this.d).a : 0; this.d = Math.max(-200, this.d + this.v * this.fwd * sf * dt);
+    // arah hadap di dunia = arah jalan + psi. Jalan yang membelok memutar psi sebanyak perubahan arah jalan yang
+    // benar-benar dilewati, jadi arah di dunia hanya berubah lewat laju belok (tidak berkedut di mulut dan ujung simpang)
+    if (bebas) { this.psi -= this.world.at(this.d).a - aPrev; this.yaw = this.psi; }
     // lampu merah dan palang kereta
     for (const L of this.lights) {
       const sl = L.d - 70;

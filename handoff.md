@@ -41,6 +41,10 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
       perkiraan di layar Beli angkot, adegan pembukuan Dimas saat kas minus;
     - suara dan getar di mini-game nyetir (`suara.js`).
 
+15. "Mekanisme beloknya masih nggak smooth". Diukur: arah angkot meloncat dalam satu frame di beberapa situasi
+    (keluar simpang sambil masih menahan tombol, menyentuh tepi, kebablasan, menekan terlalu awal). Sekarang arah hanya
+    berubah lewat putaran yang mulus. Belum dicoba pengguna di HP; tanyakan juga fps-nya (fps rendah juga terasa patah-patah).
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 

@@ -89,12 +89,17 @@ Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, 
 - ◀ ▶ = setir (`inp.steer`). Di `mount` nilai tombol naik ±0,25 dtk sampai penuh dan turun sedikit lebih cepat. Fisika
   (model kendaraan sederhana): perintah lengkung `cmd` → roda depan berputar bertahap (`S.kapA`, penuh dalam 0,5 dtk; 0,2 dtk
   saat dibantu) → dibatasi cengkeraman `A_LAT` → badan menyusul dengan kelembaman (`S.yr`, ±0,12 dtk) → arah hadap `S.psi`
-  relatif terhadap jalan. Tombol: `cmd` = tombol × `K_MAX` (1/55) × 60/laju (min 0,2). Di jalan lurus sudut dibatasi
+  relatif terhadap jalan. Arah hadap di dunia (arah jalan + `psi`) hanya berubah lewat `S.yr`, tidak pernah dipotong:
+  perubahan arah jalan dikurangkan dari `psi` tepat sesudah `d` maju, batas sudut jalan lurus bersifat lunak (putaran ke luar
+  melambat mendekati batas, lewat batas kembali pelan), dan menempel di tepi jalan meluruskan badan lewat laju belok
+  (`-psi × 6`). Uji kehalusan: lonjakan percepatan putar maks ±8 rad/dtk² saat belok normal (dulu sampai ±3.000). Tombol: `cmd` = tombol × `K_MAX` (1/55) × 60/laju (min 0,2). Di jalan lurus sudut dibatasi
   0,45 rad di laju rendah sampai 0,2 rad di laju tinggi. Dilepas di jalan lurus: "sopir bantu" (`follow`) meluruskan dan
   merapatkan ke tengah lajur yang sedang dituju (teredam, tidak memantul). Tahan 0,15 dtk = geser kecil, lebih lama = pindah
   lajur. Badan 3D miring keluar saat menikung (`S.latA`), menunduk saat mengerem; buntut mengayun saat selip (`S.slip`).
   Menyentuh tepi dengan geser ke samping < 45 = hanya mentok; lebih keras = kebablasan/nyenggol.
-- Persimpangan: tahan ◀ atau ▶ ke arah panah (>0,2) = bantuan belok: sopir bantu melihat ±0,35 dtk ke depan, jadi angkot
+- Persimpangan: tahan ◀ atau ▶ ke arah panah (>0,2) = bantuan belok, berlaku dari 200 unit sebelum mulut simpang (tekan
+  lebih awal = tetap di lajur sampai saatnya belok) sampai ±0,45 dtk sesudah keluar kalau masih ditahan (`S.jLatch`); lebih lama
+  lagi = setir biasa: sopir bantu melihat ±0,35 dtk ke depan, jadi angkot
   mulai berbelok sedikit sebelum mulut simpang dan tetap di lajurnya (meleset ±16 unit kalau baru ditekan di mulut simpang,
   ±8 kalau sedikit lebih awal). Dilepas atau tidak
   ditekan di dalam simpang = angkot lurus terus, menabrak tepi = kebablasan sekali, sisa belokan dibantu.

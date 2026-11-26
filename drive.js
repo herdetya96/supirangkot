@@ -8,11 +8,14 @@
 const W = 360, ROAD_L = 70, ROAD_R = 290, LANES = [106, 180, 254], CURB_X = 128;
 const PW = 44, PL = 84;
 const ACC = 170, BRAKE = 540, COAST = 75, LAT = 380, STOP_V = 30, CORNER_V = 235;
-// mundur: laju maksimum dan percepatan. Setir pemain: laju geser lateral ikut laju maju (STEER_*), dan berubah bertahap (STEER_R).
+// mundur: laju maksimum dan percepatan. STEER_R = percepatan geser lateral mode tombol lajur (berhenti mulus di tengah lajur).
 // tikungan: jalan selalu membelokkan angkot sendiri. Terlalu kencang menumpuk 'selip' (kelebihan laju × detik);
 // lewat SLIDE_MAX = kebablasan. Tidak ada dorongan ke samping, jadi pemain tidak pernah perlu membelokkan manual.
 const SLIDE_MAX = 40;
-const V_REV = 90, ACC_REV = 110, STEER_MIN = 26, STEER_K = 0.32, STEER_MAX = 120, STEER_R = 420, YAW_MAX = 0.2;
+// setir bebas: K_MAX = lengkung tajam penuh (1/radius), A_LAT = batas cengkeraman (tikungan jalan pas di CORNER_V)
+const K_MAX = 1 / 120, STEER_RATE = 3.5, LANE_VMAX = 170;
+const A_LAT = 235 * 235 / 420;
+const V_REV = 90, ACC_REV = 110, STEER_R = 420, YAW_MAX = 0.2;
 const KIND = { motor: { w: 16, l: 34 }, mobil: { w: 34, l: 66 }, pikap: { w: 36, l: 76 }, truk: { w: 44, l: 118 } };
 const STEP = 8, DMIN = -1000, DMAX = 17000, TURN_R = 420;
 const LIGHT_T = 16, RAIL_T = 22, CAM_U = -50, Z_STOP = 0.66, Z_FAST = 0.56;
@@ -109,7 +112,7 @@ class Sim {
   constructor(spec) {
     this.spec = spec; this.r = mulberry(spec.seed || 1); this.world = buildWorld(spec.route);
     const Wd = this.world;
-    this.t = 0; this.d = 0; this.v = 0; this.x = LANES[1]; this.tx = LANES[1]; this.vx = 0; this.yaw = 0; this.rev = false;
+    this.t = 0; this.d = 0; this.v = 0; this.x = LANES[1]; this.tx = LANES[1]; this.vx = 0; this.yaw = 0; this.rev = false; this.psi = 0; this.delta = 0; this.fwd = 1; this.under = false;
     this.vMax = spec.vMax || 340; this.brakeK = spec.wet ? 0.6 : 1;
     this.riders = []; this.fares = 0; this.boarded = 0;
     this.hits = 0; this.severe = 0; this.potholes = 0; this.tilang = 0; this.missed = 0; this.stolen = 0; this.merah = 0; this.skids = 0;
@@ -158,34 +161,37 @@ class Sim {
     const k = this.world.at(this.d).k, over = this.v - CORNER_V * (S.wet ? 0.9 : 1);
     // skid hanya untuk tampilan (buntut angkot mengayun) dan peringatan; posisi lateral tidak didorong
     this.skid = k && over > 0 ? Math.sign(k) * over * 3.2 : 0;
-    this.slide = this.skid ? this.slide + over * dt : Math.max(0, this.slide - 30 * dt);
+    const bebas = inp.steer != null && inp.lane == null;
+    this.slide = this.skid && !bebas ? this.slide + over * dt : Math.max(0, this.slide - 30 * dt);
     const grip = S.wet ? 0.85 : 1;
-    if (inp.steer != null) {
-      // setir dengan bantuan lajur: ditahan = bergeser, dilepas = meluncur ke tengah lajur terdekat searah belokan terakhir.
-      // Sentuhan singkat cukup untuk pindah satu lajur. Angkot diam tidak bisa bergeser.
-      // Laju geser mengikuti laju angkot (pelan = belok halus), dan kecepatan geser berubah bertahap, tidak langsung.
-      const raw = clamp(inp.steer, -1, 1), wob = S.wobble ? Math.sin(this.t * 1.7) * 0.25 * S.wobble : 0;
-      const f = spd < 3 ? 0 : 1, latMax = spd < 3 ? 0 : Math.min(STEER_MAX, STEER_MIN + spd * STEER_K) * grip;
-      const near = x => LANES.reduce((b, l, i) => Math.abs(l - x) < Math.abs(LANES[b] - x) ? i : b, 0);
-      let want;
-      if (Math.abs(raw) > 0.12) {
-        // awal sentuhan: catat lajur asal, supaya sentuhan sesingkat apa pun tetap pindah minimal satu lajur
-        if (this.lane != null || this.press == null || Math.sign(raw) !== this.lastDir) this.press = this.lane != null ? this.lane : near(this.x);
-        want = (raw + wob) * latMax; this.lane = null; this.lastDir = Math.sign(raw); this.tx = this.x + raw * 90;
-      } else {
-        if (this.lane == null) {
-          let ln = near(this.x + (this.lastDir || 0) * 16);
-          if (this.press != null && f > 0) ln = this.lastDir < 0 ? Math.min(ln, Math.max(0, this.press - 1)) : Math.max(ln, Math.min(LANES.length - 1, this.press + 1));
-          this.lane = ln; this.press = null;
-        }
-        const dx = LANES[this.lane] - this.x;
-        // meluncur ke tengah lajur dan berhenti mulus tepat di tengah (perlambatan tetap, tanpa memantul)
-        want = Math.sign(dx) * Math.min(latMax, Math.sqrt(2 * STEER_R * 0.8 * Math.abs(dx))) + wob * 40 * f; this.tx = LANES[this.lane];
-        if (Math.abs(dx) < 1.5 && Math.abs(this.vx) < 30) { this.x = LANES[this.lane]; want = 0; this.vx = 0; }
-      }
+    const wob = S.wobble ? Math.sin(this.t * 1.7) * 0.25 * S.wobble : 0;
+    this.fwd = 1;
+    if (inp.lane != null) {
+      // TOMBOL LAJUR: satu ketukan = tepat satu lajur. Jalan membelokkan angkot sendiri di tikungan.
+      // Geser cepat tapi mulus (percepatan terbatas, berhenti pas di tengah lajur). Angkot diam tidak bisa bergeser.
+      const L = clamp(inp.lane | 0, 0, LANES.length - 1), dx = LANES[L] - this.x;
+      const latMax = spd < 3 ? 0 : Math.min(LANE_VMAX, 50 + spd * 0.45) * grip;
+      let want = Math.sign(dx) * Math.min(latMax, Math.sqrt(2 * STEER_R * 0.8 * Math.abs(dx))) + wob * 60 * (latMax ? 1 : 0);
       this.vx += clamp(want - this.vx, -STEER_R * dt, STEER_R * dt);
-      if (!f) this.vx = 0;
-      this.steer = raw; this.x += this.vx * dt;
+      if (!latMax) this.vx = 0;
+      this.x += this.vx * dt; this.tx = LANES[L]; this.steer = Math.abs(dx) > 2 ? Math.sign(dx) : 0;
+      if (!S.wobble && Math.abs(dx) < 1.5 && Math.abs(this.vx) < 30) { this.x = LANES[L]; this.vx = 0; }
+    } else if (inp.steer != null) {
+      // SETIR BEBAS: setir mengubah arah hadap angkot (psi, relatif terhadap jalan). Jalan yang menikung memutar
+      // arah itu, jadi di tikungan pemain harus ikut membelokkan. Daya belok dibatasi cengkeraman ban:
+      // terlalu kencang = angkot tidak sanggup menikung dan melebar ke tepi (kebablasan). Dilepas, setir kembali
+      // lurus dan angkot pelan-pelan sejajar jalan lagi (hanya di jalan lurus; di tikungan bantuannya tidak cukup).
+      const raw = clamp(inp.steer, -1, 1) + wob;
+      this.delta += clamp(raw - this.delta, -STEER_RATE * dt, STEER_RATE * dt);
+      let kap = this.delta * K_MAX;
+      if (Math.abs(raw) < 0.08) kap += clamp(-this.psi * 1.2 / Math.max(spd, 60), -K_MAX * 0.3, K_MAX * 0.3);
+      const kLim = spd > 1 ? A_LAT * (S.wet ? 0.81 : 1) / (spd * spd) : K_MAX;
+      this.under = Math.abs(kap) > kLim && spd > 150 && k !== 0;      // di jalan lurus batas belok tidak dihitung selip
+      kap = clamp(kap, -kLim, kLim);
+      if (spd > 1) this.psi = clamp(this.psi + this.v * (kap + k) * dt, -1.1, 1.1);
+      this.x += this.v * Math.sin(this.psi) * dt; this.fwd = Math.cos(this.psi);
+      this.steer = this.delta; this.tx = this.x;
+      this.skid = this.under ? -Math.sign(kap) * 60 : 0;
     } else {
       if (inp.tx != null) this.tx = inp.tx;
       let tx = clamp(this.tx, ROAD_L + PW / 2, ROAD_R - PW / 2);
@@ -198,11 +204,23 @@ class Sim {
     if (this.slide >= SLIDE_MAX && this.skidCool <= 0) {
       this.skids++; this.v *= 0.55; this.slide = 0; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di tikungan!', 'bad');
     }
-    this.x = clamp(this.x, xmin, xmax);
-    // arah hadap badan angkot dihitung dari gerak sebenarnya (geser ÷ maju), dihaluskan
-    const lv = dt > 0 ? (this.x - x0) / dt : 0, yt = spd < 2 ? this.yaw : clamp(Math.atan(lv / Math.max(spd, 110)), -YAW_MAX, YAW_MAX) * Math.sign(this.v || 1);
-    this.yaw += (yt - this.yaw) * Math.min(1, dt * 7);
-    const prev = this.d; this.d = Math.max(-200, this.d + this.v * dt);
+    if (bebas) {
+      if (this.under) this.say('Ban berdecit! Kurangi gas!', 'bad');
+      // setir bebas: menabrak tepi jalan. Pelan = cuma mentok (menepi ke trotoar boleh); kencang = kebablasan.
+      const into = (this.x <= xmin && this.v * Math.sin(this.psi) < 0) || (this.x >= xmax && this.v * Math.sin(this.psi) > 0);
+      if (into) {
+        if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di tikungan!' : 'Nyenggol pinggir jalan!', 'bad'); }
+        this.psi *= 0.3;
+      }
+      this.x = clamp(this.x, xmin, xmax);
+      this.yaw = this.psi;
+    } else {
+      this.x = clamp(this.x, xmin, xmax);
+      // arah hadap badan angkot dihitung dari gerak sebenarnya (geser ÷ maju), dihaluskan
+      const lv = dt > 0 ? (this.x - x0) / dt : 0, yt = spd < 2 ? this.yaw : clamp(Math.atan(lv / Math.max(spd, 110)), -YAW_MAX, YAW_MAX) * Math.sign(this.v || 1);
+      this.yaw += (yt - this.yaw) * Math.min(1, dt * 7);
+    }
+    const prev = this.d; this.d = Math.max(-200, this.d + this.v * this.fwd * dt);
     // lampu merah dan palang kereta
     for (const L of this.lights) {
       const sl = L.d - 70;
@@ -740,6 +758,11 @@ function drawHUD(c, S, H, o, proj) {
   // pesan
   S.msgs.forEach((m, i) => { c.globalAlpha = Math.min(1, (2.6 - m.t) * 2); c.fillStyle = m.kind === 'bad' ? '#d33' : m.kind === 'good' ? '#1f9d55' : m.kind === 'kiri' ? '#b8860b' : '#1b2630'; rr(c, 60, 62 + i * 30, 200, 24, 12); c.fill(); txt(c, m.text, 160, 74 + i * 30, 12, '#fff'); c.globalAlpha = 1; });
   if (Math.abs(S.v) < 5 && !S.gas && !S.rev && S.t < 6 && !S.over) { c.fillStyle = 'rgba(31,157,85,.95)'; rr(c, 80, H - 112, 200, 30, 15); c.fill(); txt(c, 'Tahan GAS untuk jalan →', 180, H - 97, 13, '#fff'); }
+  // setir bebas: panah sebelum dan selama tikungan, supaya pemain tahu harus membelokkan ke mana
+  if (o.ctl === 'bebas' && !S.over) {
+    const a = Wd.arcs.find(a => a.d1 > d && a.d0 - d < 420);
+    if (a) { const kiri = a.dir > 0, now = a.d0 <= d; c.fillStyle = now ? 'rgba(53,120,229,.95)' : 'rgba(53,120,229,.8)'; rr(c, 95, H - 150, 170, 30, 15); c.fill(); txt(c, (kiri ? '↰ Belok kiri' : 'Belok kanan ↱') + (now ? '' : ' nanti'), 180, H - 135, 13, '#fff'); }
+  }
   // peringatan tikungan
   const ahead = Wd.arcs.find(a => a.d0 > d - 50 && a.d0 - d < 450) || (Wd.at(d).k ? {} : null);
   if (ahead && S.v > CORNER_V - 10) { c.fillStyle = 'rgba(242,194,48,.95)'; rr(c, 90, H - 76, 180, 26, 13); c.fill(); txt(c, 'Tikungan! Pelan-pelan', 180, H - 63, 12, '#111'); }
@@ -747,6 +770,9 @@ function drawHUD(c, S, H, o, proj) {
 
 /* ---------- pasang di halaman ---------- */
 const CAMS = { atas: 'Kamera atas', belakang: 'Kamera belakang', '2d': 'Peta 2D' };
+const KONTROL = { lajur: 'Tombol lajur', bebas: 'Setir bebas' };
+function ctlLoad() { try { const v = localStorage.getItem('narik-setir'); return KONTROL[v] ? v : 'lajur'; } catch (e) { return 'lajur'; } }
+function ctlSave(v) { try { localStorage.setItem('narik-setir', v); } catch (e) { /* tanpa penyimpanan tetap jalan */ } }
 function camLoad() { try { return localStorage.getItem('narik-kamera'); } catch (e) { return null; } }
 function camSave(v) { try { localStorage.setItem('narik-kamera', v); } catch (e) { /* tanpa penyimpanan tetap jalan */ } }
 function mount(host, spec, opts, done) {
@@ -754,25 +780,29 @@ function mount(host, spec, opts, done) {
   const Wd = buildWorld(spec.route), stops = Wd.landmarks.map(l => l.name);
   const R3 = root.NARIK_3D && root.NARIK_3D.available() ? root.NARIK_3D : null;
   const modes = R3 ? ['atas', 'belakang', '2d'] : ['2d'];
-  let mode = modes.includes(camLoad()) ? camLoad() : modes[0];
-  host.innerHTML = `<div class="nyetir" role="application" aria-label="Nyetir angkot">
+  let mode = modes.includes(camLoad()) ? camLoad() : modes[0], ctl = ctlLoad();
+  const KET = {
+    lajur: 'Ketuk <b>◀ ▶</b> (atau geser jari ke kiri/kanan di layar) untuk pindah <b>satu lajur</b>. Angkot selalu berbelok sendiri mengikuti jalan. Lajur paling kiri = menepi.',
+    bebas: '<b>Setir sungguhan</b>: sentuh dan geser jempol di setir. Di tikungan kamu harus ikut membelokkan; ada panah peringatan sebelum tikungan. Lepas setir, angkot pelan-pelan lurus lagi.'
+  };
+  host.innerHTML = `<div class="nyetir" role="application" aria-label="Nyetir angkot" data-kontrol="${ctl}">
     <div class="ny-kanvas"><canvas class="ny-hud"></canvas>${modes.length > 1 ? `<button class="ny-kam" data-ny="kam" aria-label="Ganti kamera">🎥 <span>${CAMS[mode]}</span></button>` : ''}
       <div class="ny-lapis" data-ny="intro"><div class="ny-kartu"><span class="eyebrow">Rit ${esc(opts.shiftName)} · Trayek ${esc(spec.route)}</span><h2>${esc(stops[0])} → ${esc(stops[stops.length - 1])}</h2>
         <p class="ny-rute">${stops.map(esc).join(' · ')}</p>
         <ul><li>Tahan <b>GAS</b> untuk jalan, <b>REM</b> untuk berhenti. Lepas gas, angkot melambat sendiri.</li>
-        <li>Sentuh sisi kiri atau kanan <b>setir</b> untuk pindah lajur. Lepas, angkot lurus sendiri di tengah lajur. Sentuhan singkat = satu lajur. Angkot harus jalan dulu.</li>
+        <li data-ny="ket">${KET[ctl]}</li>
         <li>Kelewatan penumpang? Ketuk <b>MUNDUR</b>, lalu tahan GAS untuk jalan mundur. Ketuk lagi (MAJU) untuk maju. Hati-hati, kendaraan di belakang bisa terserempet.</li>
-        <li>Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, R mundur/maju, H klakson, C kamera.</li>
+        <li>Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D lajur atau setir, R mundur/maju, H klakson, C kamera.</li>
         <li>Orang melambai di trotoar: <b>menepi ke kotak kuning dan berhenti</b>.</li><li>Ada yang teriak <b>“Kiri!”</b>: menepi dan berhenti. Ongkos dibayar waktu turun. Kelewatan, dia tidak mau bayar.</li>
-        <li>Angkot <b>selalu berbelok sendiri</b> mengikuti jalan. Setir hanya untuk pindah lajur.</li>
         <li>Tikungan terlalu kencang: ban berdecit, lalu <b>kebablasan</b>. Rem begitu dengar decit.</li>
         <li>Patuhi <b>lampu merah</b> dan <b>palang kereta</b>.</li>
         <li>Awas motor, mobil, lubang, dan polisi. Angkot biru suka menyerobot penumpang.</li></ul>
         ${spec.wet ? '<p><b>Hujan:</b> rem licin, penumpang lebih banyak.</p>' : ''}${spec.wobble ? '<p><b>Kamu ngantuk:</b> setir agak goyang.</p>' : ''}${spec.sh === 2 ? '<p><b>Sore:</b> makin lama makin gelap.</p>' : ''}
         <p>Tarif ±Rp ${spec.tarif} rb per penumpang.</p>
-        <button class="gas" data-ny="go">Gas!</button>${R3 ? `<button class="btn-teks" data-ny="grafis">Grafis: <b>${R3.quality() === 'tinggi' ? 'Tinggi' : 'Ringan'}</b> (ketuk untuk ganti)</button>` : ''}<button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
+        <button class="gas" data-ny="go">Gas!</button>${R3 ? `<button class="btn-teks" data-ny="grafis">Grafis: <b>${R3.quality() === 'tinggi' ? 'Tinggi' : 'Ringan'}</b> (ketuk untuk ganti)</button>` : ''}<button class="btn-teks" data-ny="kontrol">Kontrol: <b>${KONTROL[ctl]}</b> (ketuk untuk ganti)</button><button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
     </div>
     <div class="ny-kontrol">
+      <div class="lajur-grup"><button class="lajur-btn" data-ny="kiri" aria-label="Pindah lajur kiri">◀</button><button class="lajur-btn" data-ny="kanan" aria-label="Pindah lajur kanan">▶</button></div>
       <div class="setir" data-ny="setir" role="slider" aria-label="Setir" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
         <svg viewBox="-60 -60 120 120" aria-hidden="true"><g class="setir-roda">
           <circle r="52" fill="none" stroke="#14181c" stroke-width="13"/><circle r="52" fill="none" stroke="#3a434b" stroke-width="7"/>
@@ -786,7 +816,7 @@ function mount(host, spec, opts, done) {
   const root2 = host.firstElementChild, cv = root2.querySelector('canvas.ny-hud'), box = root2.querySelector('.ny-kanvas'), c = cv.getContext('2d');
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const S = new Sim(spec); let H = 640, k = 1, raf = 0, last = 0, running = false, closed = false;
-  const inp = { tx: null, brake: false, gas: 0, steer: 0, mundur: false }, keys = {};
+  const inp = { tx: null, brake: false, gas: 0, steer: null, lane: 1, mundur: false }, keys = {};
   let remDown = false, gasDown = false, wheel = 0, r3 = null;
   const o = { hex: opts.hex, route: spec.route, wet: spec.wet, sh: spec.sh, reduce, routeCol: opts.routeCol, zoom: Z_STOP, psx: W / 2, ppu: Z_STOP, cam: mode };
   if (R3) { try { r3 = R3.create(box, S, spec, o); } catch (e) { r3 = null; mode = '2d'; o.cam = '2d'; } }
@@ -800,9 +830,10 @@ function mount(host, spec, opts, done) {
   function frame(now) {
     // HP lambat: fisika tetap memakai langkah kecil supaya waktu rit sama dengan waktu nyata
     const dt = Math.min(0.5, (now - last) / 1000 || 0); last = now;
-    inp.steer = keys.l || keys.r ? (keys.r ? 1 : 0) - (keys.l ? 1 : 0) : wheel;
+    if (ctl === 'bebas') { inp.lane = null; inp.steer = keys.l || keys.r ? (keys.r ? 1 : 0) - (keys.l ? 1 : 0) : wheel; }
+    else { inp.steer = null; if (inp.lane == null) inp.lane = 1; }
     inp.brake = !!(keys.b || remDown); inp.gas = keys.g || gasDown ? 1 : 0;
-    wheelEl.style.transform = `rotate(${inp.steer * 110}deg)`;
+    wheelEl.style.transform = `rotate(${(S.delta || 0) * 110}deg)`; o.ctl = ctl;
     if (r3 && !r3.ready && !running) { goBtn.disabled = true; goBtn.textContent = 'Memuat kota 3D…'; }
     else if (goBtn.disabled && !running) { goBtn.disabled = false; goBtn.textContent = 'Gas!'; }
     if (running) for (let left = dt; left > 1e-6 && !S.over; left -= 0.05) S.step(Math.min(0.05, left), inp);
@@ -853,6 +884,25 @@ function mount(host, spec, opts, done) {
   const gigiBtn = root2.querySelector('[data-ny="gigi"]');
   function gigi() { inp.mundur = !inp.mundur; gigiBtn.classList.toggle('on', inp.mundur); gigiBtn.setAttribute('aria-pressed', inp.mundur); gigiBtn.textContent = inp.mundur ? 'MAJU' : 'MUNDUR'; if (running) S.say(inp.mundur ? 'Gigi mundur. Tahan GAS.' : 'Gigi maju.'); }
   gigiBtn.addEventListener('pointerdown', e => { e.preventDefault(); gigi(); });
+  // tombol lajur: satu ketukan = satu lajur. Geser jari di layar kanvas juga bisa.
+  function lajur(dir, el) {
+    if (ctl !== 'lajur' || !running) return;
+    const cur = inp.lane == null ? 1 : inp.lane, nx = clamp(cur + dir, 0, LANES.length - 1);
+    if (nx === cur) { S.say(dir < 0 ? 'Sudah paling kiri (menepi).' : 'Sudah lajur paling kanan.'); return; }
+    inp.lane = nx; if (Math.abs(S.v) < 3) S.say('Jalan dulu, baru angkot pindah lajur.');
+    if (el) { el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 160); }
+  }
+  for (const [sel, dir] of [['[data-ny="kiri"]', -1], ['[data-ny="kanan"]', 1]]) {
+    const el = root2.querySelector(sel);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); lajur(dir, el); });
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  let swipe = null;
+  box.addEventListener('pointerdown', e => { if (!e.target.closest('button,.ny-lapis')) swipe = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+  box.addEventListener('pointerup', e => {
+    if (!swipe || swipe.id !== e.pointerId) return; const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y; swipe = null;
+    if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy) * 1.2) lajur(Math.sign(dx), null);
+  });
   const tinBtn = root2.querySelector('[data-ny="tin"]');
   function klakson() { if (running) S.say('Tin tin!'); tinBtn.classList.add('on'); setTimeout(() => tinBtn.classList.remove('on'), 180); }
   tinBtn.addEventListener('pointerdown', e => { e.preventDefault(); klakson(); });
@@ -865,7 +915,10 @@ function mount(host, spec, opts, done) {
   pedal(root2.querySelector('[data-ny="rem"]'), v => { remDown = v; });
   pedal(root2.querySelector('[data-ny="gas"]'), v => { gasDown = v; });
   const KM = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r', ' ': 'b', ArrowDown: 'b', s: 'b', S: 'b', ArrowUp: 'g', w: 'g', W: 'g' };
-  function kd(e) { const m = KM[e.key]; if (m && running) { keys[m] = true; e.preventDefault(); } if ((e.key === 'c' || e.key === 'C') && modes.length > 1) cycle(); if (e.key === 'h' || e.key === 'H') klakson(); if ((e.key === 'r' || e.key === 'R') && running) gigi(); }
+  function kd(e) {
+    const m = KM[e.key];
+    if (m && running && ctl === 'lajur' && (m === 'l' || m === 'r')) { e.preventDefault(); if (!e.repeat) lajur(m === 'l' ? -1 : 1, root2.querySelector(m === 'l' ? '[data-ny="kiri"]' : '[data-ny="kanan"]')); return; }
+    if (m && running) { keys[m] = true; e.preventDefault(); } if ((e.key === 'c' || e.key === 'C') && modes.length > 1) cycle(); if (e.key === 'h' || e.key === 'H') klakson(); if ((e.key === 'r' || e.key === 'R') && running) gigi(); }
   function ku(e) { const m = KM[e.key]; if (m) keys[m] = false; }
   function cycle() { mode = modes[(modes.indexOf(mode) + 1) % modes.length]; o.cam = mode; camSave(mode); const lb = root2.querySelector('.ny-kam span'); if (lb) lb.textContent = CAMS[mode]; }
   window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('resize', size);
@@ -875,6 +928,10 @@ function mount(host, spec, opts, done) {
     if (a === 'auto') close(null);
     if (a === 'done') close(S.result());
     if (a === 'kam') cycle();
+    if (a === 'kontrol' && !running) {
+      ctl = ctl === 'lajur' ? 'bebas' : 'lajur'; ctlSave(ctl); root2.dataset.kontrol = ctl;
+      b.querySelector('b').textContent = KONTROL[ctl]; root2.querySelector('[data-ny="ket"]').innerHTML = KET[ctl];
+    }
     if (a === 'grafis' && R3 && !running) {
       // ganti mode grafis: bangun ulang tampilan 3D dengan material dan bayangan yang sesuai
       const q = R3.quality() === 'tinggi' ? 'ringan' : 'tinggi'; R3.setQuality(q); b.querySelector('b').textContent = q === 'tinggi' ? 'Tinggi' : 'Ringan';

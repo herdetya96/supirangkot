@@ -72,15 +72,20 @@ Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik 
 ## Mini-game nyetir
 
 Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
-60 detik di kota Cibening. Kontroler: setir bulat di kiri, tombol MUNDUR dan klakson di tengah, pedal REM dan GAS di kanan.
-Tanpa gas angkot melambat sendiri (`COAST` 75/dtk²). Gigi mundur (`inp.mundur`, tombol MUNDUR/MAJU atau R): gas mendorong
-ke belakang sampai `V_REV` 90; kalau angkot masih bergerak ke arah lain, gas mengerem dulu. Mundur menabrak kendaraan di
-belakang = serempet. Lampu mundur putih di 2D dan 3D. Setir memakai bantuan lajur: ditahan = bergeser, dilepas = meluncur ke
-tengah lajur terdekat searah belokan dan berhenti mulus; sentuhan sesingkat apa pun pindah minimal satu lajur (`press`/`lane` di Sim).
-Laju geser ikut laju angkot (`STEER_MIN` 26 + `STEER_K` 0,32 × v, maks 120) dan berubah bertahap (`STEER_R`): pindah satu lajur
-0,9 dtk di 53 km/j, 1,7 dtk di 11 km/j. Badan angkot menghadap arah gerak sebenarnya (`S.yaw`, maks `YAW_MAX` 0,2 rad).
-Angkot diam tidak bisa bergeser. Bot "jempol" (sentuh-lepas dengan reaksi 0,25 dtk) naik 14 penumpang, Rp 106 rb per rit.
-Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, R mundur/maju, H klakson, C kamera. Bot (`drivebot.js`) tetap
+60 detik di kota Cibening. Dua cara setir, dipilih di kartu pembuka (`localStorage` kunci `narik-setir`):
+- **Tombol lajur** (`lajur`, bawaan): tombol ◀ ▶ (atau geser jari di layar, atau ←/→) = tepat satu lajur (`inp.lane`).
+  Jalan selalu membelokkan angkot sendiri. Geser lajur 0,8–1,2 dtk, berhenti mulus di tengah. Ngebut di tikungan
+  menumpuk selip: "Ban berdecit!" lalu kebablasan di `SLIDE_MAX` 40 (bot juga memakai aturan ini).
+- **Setir bebas** (`bebas`): setir bulat mengubah arah hadap angkot `S.psi` relatif terhadap jalan (`inp.steer`, lengkung
+  maks `K_MAX` 1/120). Lengkung jalan memutar arah itu, jadi di tikungan pemain harus ikut membelokkan (panah biru "Belok
+  kiri/kanan" muncul sebelumnya). Daya belok dibatasi cengkeraman `A_LAT` (tikungan jalan pas di 235, 90% saat hujan),
+  jadi ngebut = melebar ke tepi = kebablasan secara fisik. Dilepas, setir lurus dan angkot pelan-pelan sejajar jalan
+  (bantuan tidak cukup untuk tikungan). Menabrak tepi di atas laju 110 = kebablasan/nyenggol.
+Bot jempol (reaksi 0,25 dtk): tombol lajur 14,1 penumpang, Rp 106 rb per rit; setir bebas 13,5 penumpang, Rp 96 rb.
+Tombol MUNDUR dan klakson di tengah, pedal REM dan GAS di kanan. Tanpa gas angkot melambat sendiri (`COAST` 75/dtk²).
+Gigi mundur (`inp.mundur`, tombol MUNDUR/MAJU atau R): gas mendorong ke belakang sampai `V_REV` 90; kalau angkot masih
+bergerak ke arah lain, gas mengerem dulu. Mundur menabrak kendaraan di belakang = serempet. Lampu mundur putih di 2D dan 3D.
+Angkot diam tidak bisa bergeser. Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D lajur atau setir, R mundur/maju, H klakson, C kamera. Bot (`drivebot.js`) tetap
 memakai target lajur `inp.tx` dan gas penuh kecuali saat mengerem, jadi angka keseimbangan tidak berubah. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
 `localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Setir jari memakai posisi angkot di layar
 (`o.psx`, `o.ppu`), jadi sama untuk ketiganya. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat
@@ -97,9 +102,7 @@ ditahan tidak menutupnya.
   yang kelewatan tidak bayar.
 - Lampu merah: siklus 16 dtk (hijau 11, kuning 1,5, merah 3,5). Palang kereta: 22 dtk, tertutup 6,5 dtk. Menerobos = tilang
   Rp 75 rb. Saat merah ada mobil melintas, dan saat palang tertutup kereta lewat; ditabrak = ganti rugi.
-- Tikungan: jalan selalu membelokkan angkot sendiri, di laju berapa pun; setir hanya untuk pindah lajur. Di atas 235 (90% saat hujan)
-  angkot menumpuk selip (kelebihan laju × detik): "Ban berdecit!" di 35%, kebablasan di `SLIDE_MAX` 40 (kondisi −1, laju ×0,55).
-  Tidak ada dorongan ke samping (dulu ada, dan pemain kadang harus membelokkan manual, kadang tidak).
+- Tikungan: lihat dua cara setir di atas. Tanpa dorongan ke samping di mode tombol lajur; di setir bebas, fisika arah hadap.
 - Kendaraan searah (motor, mobil, pikap, truk, angkot biru) ikut berhenti di lampu merah dan di belakang kendaraan lain.
   Kendaraan arah berlawanan hanya hiasan.
 - Tarif per penumpang = pendapatan rit dasar × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (12,5).

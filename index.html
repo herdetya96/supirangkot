@@ -234,6 +234,27 @@ main { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 24px; displa
 .setir-btn small { font-family: var(--body); font-size: 12px; letter-spacing: 0; font-weight: 600; opacity: .9; }
 .otomatis { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); margin: 4px 0 -2px; }
 
+/* ---------- adegan rumah 3D (rumah3d.js) di layar pagi dan malam ---------- */
+#rm { position: absolute; inset: 0; z-index: 0; background: #1b2630; }
+#rm canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
+.di-rumah #v { position: relative; z-index: 1; pointer-events: none; }
+.di-rumah #v > *, .di-rumah #v .lapis { pointer-events: auto; }
+.di-rumah #v > .rm-tengah { pointer-events: none; }
+.di-rumah .hud { background: rgba(27, 38, 48, .9); }
+.rm-tengah { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: flex-start; padding: 10px 12px; }
+.rm-papan { pointer-events: auto; text-align: left; max-width: 78%; background: rgba(255, 253, 248, .93); border: 1.5px solid var(--tinta); border-radius: 10px; box-shadow: 2px 2px 0 var(--tinta); padding: 7px 11px; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.rm-papan b { font-size: 13px; } .rm-papan span { color: var(--tinta-2); }
+.rm-bawah { padding: 18px 14px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 9px; background: linear-gradient(rgba(15, 22, 28, 0), rgba(15, 22, 28, .78) 34%); }
+.rm-chip { display: flex; gap: 7px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; }
+.rm-chip::-webkit-scrollbar { display: none; }
+.chip { flex: none; border: 1.5px solid var(--tinta); background: var(--kartu); border-radius: 99px; padding: 7px 13px; font-weight: 700; font-size: 13px; box-shadow: 2px 2px 0 var(--tinta); }
+.chip.kuning { background: var(--plat); }
+.rm-tip { color: #dfe6ea; font-size: 12px; text-align: center; margin: -2px 0 0; }
+.di-rumah main.rm-panel { flex: 0 1 auto; max-height: 52%; background: var(--kertas); border-radius: 16px 16px 0 0; border-top: 2px solid var(--tinta); padding-top: 14px; }
+.di-rumah .cta { border-top: 0; }
+#tirai { position: absolute; inset: 0; z-index: 60; background: #0d1116; opacity: 0; pointer-events: none; transition: opacity .6s ease; }
+#tirai.on { opacity: 1; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -244,6 +265,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 24px; displa
 <script src="suara.js"></script>
 <script src="drive.js"></script>
 <script src="drive3d.js"></script>
+<script src="rumah3d.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>

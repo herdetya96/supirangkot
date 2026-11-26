@@ -687,20 +687,26 @@ function envMap() {
   const pm = new T.PMREMGenerator(REN); ENVT = pm.fromScene(sc, 0.02).texture; pm.dispose();
   return ENVT;
 }
-function create(box, S, spec, o) {
-  // kanvas dipasang langsung; isi 3D dibangun setelah aset Blender selesai dimuat (api.ready)
+function siapRen() {
+  // satu WebGLRenderer untuk semua tampilan 3D (rit nyetir dan adegan rumah); mode grafis dibaca ulang tiap kali dipasang:
+  // 'tinggi' (PBR, tekstur Blender, bayangan) butuh WebGL2; 'ringan' = Lambert tanpa bayangan
   const T = root.THREE;
   if (!REN) {
     REN = new T.WebGLRenderer({ antialias: (root.devicePixelRatio || 1) < 2, powerPreference: 'high-performance' });
     REN.setPixelRatio(Math.min(1.5, root.devicePixelRatio || 1));
   }
-  const canvas = REN.domElement; canvas.className = 'ny-3d';
-  box.insertBefore(canvas, box.firstChild);
-  // mode grafis: 'tinggi' (PBR, tekstur Blender, bayangan) butuh WebGL2; 'ringan' = tampilan lama
   HI = quality() === 'tinggi' && REN.capabilities.isWebGL2; LIN = HI;
   REN.outputEncoding = HI ? T.sRGBEncoding : T.LinearEncoding;
   REN.toneMapping = HI ? T.ACESFilmicToneMapping : T.NoToneMapping; REN.toneMappingExposure = 1.0;
   REN.shadowMap.enabled = HI; REN.shadowMap.type = T.PCFSoftShadowMap;
+  return REN;
+}
+function create(box, S, spec, o) {
+  // kanvas dipasang langsung; isi 3D dibangun setelah aset Blender selesai dimuat (api.ready)
+  const T = root.THREE;
+  siapRen();
+  const canvas = REN.domElement; canvas.className = 'ny-3d';
+  box.insertBefore(canvas, box.firstChild);
   let impl = null, size = null, gone = false;
   const api = {
     canvas, ready: false, proj: () => [180, 400], get scene() { return impl && impl.scene; },
@@ -985,7 +991,10 @@ function createImpl(canvas, S, spec, o) {
   return { canvas, render, resize, proj, detach, scene };
 }
 
-const API = { available, create, loadAssets, quality, setQuality, assets: AS, _static: STATIC };
+const API = { available, create, loadAssets, quality, setQuality, assets: AS, _static: STATIC,
+  // bagian dalam untuk adegan lain (rumah3d.js) supaya renderer, material, dan aset dipakai bersama
+  _: { siapRen, mat, C, assetGeo, vehicleGeo, hasAsset, animMat, animShader, sendiOf, envMap, M2U, ORANG, HAIR, CELANA,
+    get HI() { return HI; } } };
 if (available()) loadAssets();
 root.NARIK_3D = API;
 })(typeof window !== 'undefined' ? window : globalThis);

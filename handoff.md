@@ -60,6 +60,10 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
     di vertex shader: melangkah, melambai, naik ke pintu angkot, turun ke trotoar. Pengendara motor belum bergerak
     (pose duduk tetap), roda tidak berputar.
 
+19. "Homescreen jangan UI tombol, tapi scene rumah supir dengan angkot; selesai narik pulang ke rumah, istirahat; mau
+    narik keluar rumah, ke dekat angkot, jalankan angkotnya." Dibuat `rumah3d.js` (lihat CLAUDE.md). Belum ada: hujan di
+    adegan rumah, sopir lain datang mengambil angkotnya, interior rumah.
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 
@@ -185,7 +189,7 @@ Satu rit penuh di Chromium headless lewat Playwright; butuh server jalan.
 
 ## Publikasi ke artifact
 
-Publikasikan `index.html` dengan peta file berikut ke URL yang sama: `game.js`, `ui.js`, `drive.js`, `suara.js`, `drive3d.js`,
+Publikasikan `index.html` dengan peta file berikut ke URL yang sama: `game.js`, `ui.js`, `drive.js`, `suara.js`, `drive3d.js`, `rumah3d.js`,
 `vendor/three.min.js`, `assets/models.js`, `assets/img/detail.webp`, dan
 `assets/img/angkot-{hijau,biru,kuning,merah,ungu}.webp`, `assets/img/potret-{ujang,sobari,rina,dimas}.webp`. `vendor/GLTFLoader.js` sudah dihapus.
 

@@ -38,6 +38,17 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   `lubang`, `tilang` (peluit), `mogok`. Getar (`navigator.vibrate`, tidak ada di iPhone) untuk tabrakan, selip, lubang, tilang.
   Hidup/mati lewat tombol 🔊 di kiri atas, `localStorage` kunci `narik-suara`. AudioContext dibuat saat tombol Gas! ditekan
   dan dihentikan saat tab disembunyikan.
+- `rumah3d.js` = adegan rumah sopir (`window.NARIK_RUMAH`), layar utama pagi dan malam dalam 3D. Halaman rumah (aset `rumah`
+  menghadap kamera, ruko, warung, pohon, tiang, kampung jauh), angkot armada parkir menghadap kanan (dua di halaman, sisanya
+  di pinggir jalan), Dimas di teras, tokoh pemain (bentuk `orang_dimas`, baju hijau) yang berjalan dengan mengetuk tanah
+  atau angkot (rintangan rumah/angkot dihindari dengan menyusuri sisi). Pagi: tombol "Jalan ke angkot" → setelah dekat pintu
+  angkot jadi "Naik dan berangkat narik" (`ke-angkot` di `ui.js`) → tokoh naik, angkot melaju ke kanan, Dimas melambai, tirai
+  gelap, lalu layar rit seperti biasa. Malam: angkot pulang dari kiri dan parkir (lampu depan), tokoh turun dan jalan ke teras,
+  buku setoran di panel bawah (kamera digeser naik), "Masuk rumah, istirahat" → tokoh masuk pintu → tirai → pagi berikutnya.
+  Kalau pemain tidak menyetir sendiri, tokoh tidak ikut naik. Menu pagi jadi baris tombol (Armada, Kabar & target, Sopir, Beli,
+  Bayar utang, Berkas sidang, Trayek, Cara main), kartu angkot dan kabar pindah ke lembar `armada`/`kabar`. Renderer,
+  material, aset dipakai bersama `drive3d.js` lewat `NARIK_3D._` (`siapRen`, `mat`, `assetGeo`, `vehicleGeo`, `animMat`, ...);
+  kanvasnya dipindah antara `#rm` dan layar nyetir. Kalau 3D tidak tersedia, tampilan kartu lama dipakai.
 - `drive3d.js` = tampilan 3D (`window.NARIK_3D`) memakai three.js r128 di `vendor/three.min.js` (MIT, `vendor/THREE-LICENSE`).
   Dua mode grafis (`localStorage` kunci `narik-grafis`, tombol di kartu pembuka rit):
   - **Tinggi** (bawaan, butuh WebGL2): `MeshStandardMaterial` PBR, warna linear + tone mapping ACES, peta pantulan langit

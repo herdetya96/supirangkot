@@ -1,4 +1,4 @@
-/* Uji alur di browser: judul → pagi → berangkat → Nyetir sendiri (3D) → satu rit penuh dengan keyboard → ringkasan → hasil.
+/* Uji alur di browser: judul → pagi (adegan rumah: jalan ke angkot, naik) → berangkat → Nyetir sendiri (3D) → satu rit penuh dengan keyboard → ringkasan → hasil.
    Butuh server jalan (npm run serve) dan Playwright + Chromium. Jalankan: node tools/uji/alur.js
    Tangkapan layar kartu pembuka disimpan di folder sementara sistem (os.tmpdir()). Rit nyata ±60-120 dtk di Chromium tanpa GPU. */
 const { chromium } = require('playwright');
@@ -14,7 +14,14 @@ const URL = process.env.NARIK_URL || 'http://localhost:5173/';
   await p.reload();
   await p.click('[data-act="mulai"]');
   for (let i = 0; i < 40; i++) { if (await p.$('#sc-btn')) await p.click('#sc-btn'); else if (await p.$('#card-btn')) await p.click('#card-btn'); else break; }
-  await p.click('[data-act="depart"]');
+  // layar pagi: adegan rumah 3D (jalan ke angkot, lalu naik) atau tombol Berangkat di tampilan kartu
+  await p.waitForTimeout(1500);
+  if (await p.$('[data-act="ke-angkot"]')) {
+    await p.click('[data-act="ke-angkot"]');
+    await p.waitForFunction(() => /berangkat/i.test((document.querySelector('[data-act="ke-angkot"]') || {}).textContent || ''), null, { timeout: 60000 });
+    await p.click('[data-act="ke-angkot"]');
+    await p.waitForSelector('[data-act="setir"], [data-act="ev"]', { timeout: 60000 });
+  } else await p.click('[data-act="depart"]');
   if (await p.$('[data-act="ev"]')) { await p.click('[data-act="ev"]:not([disabled])'); await p.click('[data-act="ev-ok"]'); }
   await p.evaluate(() => { const D = window.NARIK_DRIVE, m0 = D.mount; D.mount = (...a) => (window.__m = m0(...a)); });
   await p.click('[data-act="setir"]');

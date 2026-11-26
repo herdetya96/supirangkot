@@ -2,7 +2,7 @@
 (function () {
 'use strict';
 const G = window.NARIK, app = document.getElementById('app'), KEY = 'narik-save-v1';
-app.innerHTML = '<div id="v"></div><div id="ny"></div><div id="roti" class="roti" hidden role="status"></div>';
+app.innerHTML = '<div id="rm" hidden></div><div id="v"></div><div id="ny"></div><div id="tirai" aria-hidden="true"></div><div id="roti" class="roti" hidden role="status"></div>';
 const V = document.getElementById('v'), roti = document.getElementById('roti'), NY = document.getElementById('ny');
 const fmt = G.fmt;
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -12,7 +12,37 @@ const PATHS = { '05': 'M48 138 C 92 154, 122 120, 172 110', '09': 'M48 138 C 38 
 const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let S = null, view = 'title', lastSave = null, toastT = null, raf = 0;
-let U = { modal: null, sc: null, card: null, shift: 0, stage: '', ev: null, evOut: '', res: null, night: 0, ask: false };
+let U = { modal: null, sc: null, card: null, shift: 0, stage: '', ev: null, evOut: '', res: null, night: 0, ask: false, dekat: false, sibuk: false };
+
+/* ---------- adegan rumah 3D (rumah3d.js): layar pagi dan malam ----------
+   Halaman rumah dengan angkot diparkir; tombol menu di bawah. Kalau 3D tidak tersedia, tampilan kartu lama dipakai. */
+const RM = window.NARIK_RUMAH, rmEl = document.getElementById('rm'), tirai = document.getElementById('tirai');
+let rm = null, rmSiap = false, rmArmada = '', rmMutu = '';
+const pakaiRumah = () => rmSiap && !!rm;
+function armadaRumah() {
+  return S.fleet.map(a => ({ route: a.route, hex: HEX[a.color], self: a.driver === 'self', name: a.name }))
+    .sort((a, b) => (b.self ? 1 : 0) - (a.self ? 1 : 0));
+}
+function tampilRumah(phase) {
+  if (!rmSiap || !S) return false;
+  const o = { phase, fleet: armadaRumah(), wx: S.wx.today };
+  rmEl.hidden = false; app.classList.add('di-rumah');
+  // mode grafis bisa diganti di kartu rit: material adegan rumah dibangun ulang
+  const mutu = window.NARIK_3D.quality(); if (rm && mutu !== rmMutu) { rm.lepas(); rm = null; } rmMutu = mutu;
+  if (!rm) {
+    try { rm = RM.mount(rmEl, o); } catch (e) { rmSiap = false; rmEl.hidden = true; app.classList.remove('di-rumah'); return false; }
+    rm.onDekat = d => { U.dekat = d; if (view === 'pagi' && !U.sibuk) render(); };
+  } else { rm.setel(o); rm.lanjut(); }
+  rmArmada = JSON.stringify(o.fleet); U.dekat = rm.dekat;
+  return true;
+}
+function sembunyiRumah() { if (rm) rm.jeda(); rmEl.hidden = true; app.classList.remove('di-rumah'); }
+function tutupTirai(cb) { tirai.classList.add('on'); setTimeout(cb, reduce ? 0 : 650); }
+function bukaTirai() { requestAnimationFrame(() => tirai.classList.remove('on')); }
+if (RM && RM.available()) window.NARIK_3D.loadAssets().then(ok => {
+  rmSiap = !!ok;
+  if (rmSiap && S && (view === 'pagi' || view === 'malam') && !U.sc) { tampilRumah(view); render(); }
+});
 
 /* ---------- simpan ---------- */
 function save() {
@@ -77,7 +107,27 @@ function kirPill(a) {
   if (!a.kir) return `<p><span class="pill warn">Belum uji KIR</span></p>`;
   return a.cond >= G.B3.lulus ? `<p><span class="pill ok">KIR lulus</span></p>` : `<p><span class="pill bad">KIR lulus, kondisi di bawah ${G.B3.lulus}</span></p>`;
 }
+function pagiRumah() {
+  const b2 = S.bab >= 2, g = G.goals(S)[0], kab = G.kabar(S, false);
+  const self = S.fleet.some(a => a.driver === 'self');
+  const cta = U.sibuk ? 'Berangkat…' : U.dekat ? (self ? 'Naik dan berangkat narik' : 'Berangkatkan armada') : 'Jalan ke angkot';
+  return hdr() + `<div class="rm-tengah"><button class="rm-papan" data-act="modal" data-m="kabar"><b>${esc(kab[0])}</b>${kab[1] ? `<span>${esc(kab[1])}</span>` : ''}${g ? `<span>Target ${esc(g.scope.toLowerCase())}: ${esc(g.text)}</span>` : ''}</button></div>
+    <footer class="rm-bawah">
+      <div class="rm-chip">
+        <button class="chip" data-act="modal" data-m="armada">Armada · ${S.fleet.length}</button>
+        <button class="chip" data-act="modal" data-m="kabar">Kabar & target</button>
+        ${G.b3on(S) ? `<button class="chip kuning" data-act="modal" data-m="sidang">Berkas sidang</button>` : ''}
+        ${b2 ? `<button class="chip" data-act="modal" data-m="sopir">Sopir${S.cand.length ? ' · ' + S.cand.length : ''}</button><button class="chip" data-act="modal" data-m="dealer">Beli angkot</button>`
+          : `<button class="chip" data-act="modal" data-m="bayar">Bayar utang</button>`}
+        <button class="chip" data-act="modal" data-m="trayek">Trayek</button>
+        <button class="chip" data-act="modal" data-m="bantuan">Cara main</button>
+      </div>
+      <button class="gas ${U.dekat ? '' : 'kuning'}" data-act="ke-angkot" ${U.sibuk ? 'disabled' : ''}>${cta}</button>
+      <p class="rm-tip">Ketuk tanah untuk berjalan. Ketuk angkot untuk menghampirinya.</p>
+    </footer>`;
+}
 function pagi() {
+  if (pakaiRumah()) return pagiRumah();
   const kabar = G.kabar(S, false).map(k => `<li>${esc(k)}</li>`).join('');
   const b2 = S.bab >= 2, freeDrv = b2 ? G.freeDrivers(S).length : 0;
   return hdr() + `<main>
@@ -176,12 +226,12 @@ function runShift(mode) {
 
 /* ---------- malam ---------- */
 function malam() {
-  const T = S.today;
+  const T = S.today, rmh = pakaiRumah(), tengah = rmh ? '<div class="rm-tengah"></div>' : '', mk = rmh ? '<main class="rm-panel">' : '<main>';
   if (U.night === 1) {
     const kabar = G.kabar(S, true).map(k => `<li>${esc(k)}</li>`).join('');
-    return hdr() + `<main><section><div class="sec-h"><h2>Kabar besok</h2></div><div class="kartu papan"><ul>${kabar}</ul></div></section>
-      <section><div class="sec-h"><h2>Target</h2></div>${goalsHTML()}</section></main>
-      <footer class="cta"><button class="gas kuning" data-act="tidur">Tidur · hari ke-${S.day + 1}</button></footer>`;
+    return hdr() + tengah + `${mk}<section><div class="sec-h"><h2>Kabar besok</h2></div><div class="kartu papan"><ul>${kabar}</ul></div></section>
+      ${rmh ? '' : `<section><div class="sec-h"><h2>Target</h2></div>${goalsHTML()}</section>`}</main>
+      <footer class="cta"><button class="gas kuning" data-act="tidur" ${U.sibuk ? 'disabled' : ''}>${rmh ? 'Masuk rumah, istirahat' : 'Tidur'} · hari ke-${S.day + 1}</button></footer>`;
   }
   const rows = (T.rows || []).map(r => r.off ? `<div class="sopir-row"><b>${esc(r.who)} · ${esc(r.name)}</b><span>libur</span></div>`
     : `<div class="sopir-row"><b>${esc(r.who)} · ${esc(r.name)}</b><b class="num" style="color:var(--ijo-tua)">+${fmt(r.paid).replace('Rp ', '')}</b>
@@ -190,7 +240,7 @@ function malam() {
   const led = L.map(x => `<div class="baris"><span>${esc(x.k)}</span><b class="${x.v >= 0 ? 'plus' : 'minus'}">${x.v >= 0 ? '+' : '−'}${fmt(Math.abs(x.v)).replace('Rp ', '')}</b></div>`).join('');
   const debt = S.bab === 1 && G.debtLeft(S) > 0 ? `<section><div class="sec-h"><h2>Utang ke Haji Sobari</h2><span>Sisa ${fmt(G.debtLeft(S))}</span></div>
       <div class="menu"><button class="btn" data-act="bayar" data-a="100" ${S.money >= 100 ? '' : 'disabled'}>Bayar Rp 100 rb</button><button class="btn" data-act="bayar" data-a="500" ${S.money >= 500 ? '' : 'disabled'}>Bayar Rp 500 rb</button></div></section>` : '';
-  return hdr() + `<main>
+  return hdr() + tengah + `${mk}
     ${rows ? `<section><div class="sec-h"><h2>Setoran sopir</h2></div><div class="kartu" style="padding:4px 14px">${rows}</div></section>` : ''}
     <section><div class="kartu buku"><h2>Buku hari ke-${S.day}</h2>${led}<div class="baris total"><span>Selisih hari ini</span><b class="${tot >= 0 ? 'plus' : 'minus'}">${tot >= 0 ? '+' : '−'}${fmt(Math.abs(tot)).replace('Rp ', '')}</b></div></div></section>
     ${T.petisi != null && S.bab === 3 ? `<section><div class="karcis"><div class="stub">Petisi</div><div class="isi"><p>+${T.petisi} tanda tangan hari ini</p>${bar(S.b3.petisi, G.B3.target)}<small>${S.b3.petisi} dari ${G.B3.target}</small></div></div></section>` : ''}
@@ -252,6 +302,14 @@ function modalHTML() {
         ${row('Kelayakan armada', sc.arm, P.w.arm, `${sc.okA} dari ${sc.n} angkot lulus KIR dan layak jalan.`)}
         ${row('Halaman buku Bapak', sc.hal, P.w.hal, B.halaman ? 'Ada di tanganmu.' : 'Belum ada.')}
       <div class="sec-h" style="margin:6px 0 0"><h2>Uji KIR</h2></div>${kir}`);
+  }
+  if (m.m === 'kabar') {
+    const kabar = G.kabar(S, false).map(k => `<li>${esc(k)}</li>`).join('');
+    return sheet('Kabar pagi', `<div class="kartu papan"><ul>${kabar}</ul></div><div class="sec-h" style="margin:4px 0 0"><h2>Target</h2></div>${goalsHTML()}`);
+  }
+  if (m.m === 'armada') {
+    const free = S.bab >= 2 ? G.freeDrivers(S).length : 0;
+    return sheet('Armada', `<p>${S.fleet.length} angkot${free ? ` · ${free} sopir menganggur` : ''}. Atur sopir, trayek, dan setoran sebelum berangkat.</p>${S.fleet.map(angkotCard).join('')}`);
   }
   if (m.m === 'bayar') {
     const sch = S.debt.sched.filter(x => x.amt > 0).map(x => `<div class="baris"><span>Hari ke-${x.day}</span><b>${fmt(x.amt)}</b></div>`).join('');
@@ -337,6 +395,10 @@ function title() {
 
 /* ---------- render ---------- */
 function render() {
+  if (rmSiap && S && (view === 'pagi' || view === 'malam')) {
+    if (rmEl.hidden) tampilRumah(view);
+    else if (rm && view === 'pagi') { const f = JSON.stringify(armadaRumah()); if (f !== rmArmada) { rmArmada = f; rm.armada(armadaRumah()); } }
+  } else if (!rmEl.hidden) sembunyiRumah();
   const m = V.querySelector('main'), lb = V.querySelector('.lembar-b'); const key = view + (view === 'siang' ? '' : U.night);
   const st = m && V.dataset.key === key ? m.scrollTop : 0, sl = lb ? lb.scrollTop : 0;
   let h = view === 'title' ? title() : view === 'pagi' ? pagi() : view === 'siang' ? siang() : malam();
@@ -348,7 +410,9 @@ function render() {
   const f = V.querySelector('#sc-btn, #card-btn'); if (f) f.focus({ preventScroll: true });
 }
 function startPagi() {
-  view = 'pagi'; U.night = 0; U.modal = null;
+  view = 'pagi'; U.night = 0; U.modal = null; U.sibuk = false; U.dekat = false;
+  if (rmSiap) tampilRumah('pagi');
+  bukaTirai();
   playScenes('pagi', () => { save(); render(); });
 }
 function begin(s, fresh) {
@@ -380,20 +444,39 @@ const ACT = {
   bayar(d) { const p = G.payDebt(S, +d.a); if (p) toast('Dibayar ' + fmt(p) + '. Sisa utang ' + fmt(G.debtLeft(S)) + '.'); render(); },
   depart() {
     if (!G.active(S).length) { toast('Belum ada angkot yang punya sopir.'); return; }
-    G.depart(S); view = 'siang'; U.modal = null; enterShift(0);
+    G.depart(S); view = 'siang'; U.modal = null; U.sibuk = false; sembunyiRumah(); enterShift(0);
+  },
+  'ke-angkot'() {
+    // adegan rumah: jalan dulu ke angkot; kalau sudah di sampingnya, naik dan berangkat (angkot melaju keluar halaman)
+    if (!rm) { ACT.depart(); return; }
+    if (!G.active(S).length) { toast('Belum ada angkot yang punya sopir. Atur di Armada.'); return; }
+    if (!U.dekat) { rm.keAngkot(); return; }
+    U.sibuk = true; render();
+    rm.berangkat(() => tutupTirai(() => { ACT.depart(); bukaTirai(); }), S.fleet.some(a => a.driver === 'self'));
   },
   ev(d) { U.evOut = G.resolveEvent(S, +d.i); U.stage = 'evout'; render(); },
   'ev-ok'() { U.stage = 'mode'; render(); },
   mode(d) { runShift(d.m); },
   setir() { drive(); },
-  'next-shift'() { if (U.shift < 2) enterShift(U.shift + 1); else { G.endDay(S); view = 'malam'; U.night = 0; save(); render(); } },
+  'next-shift'() {
+    if (U.shift < 2) { enterShift(U.shift + 1); return; }
+    G.endDay(S); view = 'malam'; U.night = 0; save();
+    // pulang: angkot masuk halaman dan parkir, lalu turun dan jalan ke teras
+    if (rmSiap && tampilRumah('malam')) rm.pulang(S.fleet.some(a => a.driver === 'self'));
+    render();
+  },
   tutup() {
     playScenes('malam', () => {
       if (S.over) { U.card = { eb: 'Si Ijo disita', t: 'Merintis Lagi', b: 'Mang Ujang meminjami tabungannya untuk menebus Si Ijo. Utangnya kembali dari awal, tapi kamu sudah lebih tahu jalan.', cta: 'Mulai lagi', cb: () => { const n = S.name, r = (S.retry || 0) + 1; begin(G.newGame(n, null, r), true); } }; render(); return; }
       U.night = 1; save(); render();
     });
   },
-  tidur() { G.nextDay(S); startPagi(); },
+  tidur() {
+    const lanjut = () => { G.nextDay(S); startPagi(); };
+    if (!rm || !pakaiRumah()) { lanjut(); return; }
+    U.sibuk = true; render();
+    rm.istirahat(() => tutupTirai(lanjut));
+  },
   'sc-next'() { scNext(); },
   'sc-pick'(d) { scPick(+d.i); },
   'card-ok'() { const cb = U.card.cb; U.card = null; cb(); }

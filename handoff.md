@@ -10,7 +10,7 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
   pengingat sistem. Semua commit sudah di-push.
   Belum ada PR; jangan buat PR kecuali diminta.
 - **Versi:** 0.9.0. Game bisa dimainkan dari Bab 1 sampai kartu "Bersambung" setelah Bab 3.
-- **Versi yang bisa dimainkan:** artifact https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ (versi 18), halaman privat
+- **Versi yang bisa dimainkan:** artifact https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ (versi 19), halaman privat
   milik pengguna. Setiap perubahan dipublikasikan ulang ke URL yang sama (lihat "Publikasi" di bawah).
 - **Bahasa:** pengguna menulis dalam bahasa Indonesia santai, jadi jawab juga dalam bahasa Indonesia. Teks di dalam game
   mengikuti "Gaya tulisan" di `CLAUDE.md`.

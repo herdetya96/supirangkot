@@ -8,6 +8,9 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 - `npm run serve` lalu buka `http://localhost:5173`
 - `npm run sim` menjalankan `sim.js` (300 permainan per strategi). Jalankan setiap kali angka ekonomi diubah.
 - `npm run drive` menjalankan `drivebot.js`: dua bot sopir memainkan mini-game nyetir 200 kali. Jalankan setiap kali `drive.js` atau `G.DRIVE` diubah.
+- `npm run uji:setir` menguji setir pemain tanpa browser (`tools/uji/setir.js`): pindah lajur, persimpangan, bot jempol tombol.
+  `npm run uji:alur` memainkan satu rit penuh di Chromium headless lewat Playwright (`tools/uji/alur.js`, butuh `npm run serve`).
+- Ringkasan status dan riwayat permintaan pengguna untuk sesi baru: `handoff.md`.
 - `npm run assets` membuat ulang tekstur material `assets/img/detail.webp` (`tools/blender/build_textures.py`), model 3D
   `assets/models/*.glb` (`tools/blender/build_assets.py`), membungkus model jadi `assets/models.js` (`tools/pack_models.js`),
   lalu merender gambar angkot menu `assets/img/angkot-<warna>.webp` dengan Cycles (`tools/blender/render_sprites.py`).

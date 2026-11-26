@@ -7,6 +7,7 @@
     "sim": "node sim.js",
     "drive": "node drivebot.js",
     "assets": "python3 tools/blender/build_textures.py assets/img && python3 tools/blender/build_assets.py assets/models && node tools/pack_models.js && python3 tools/blender/render_sprites.py assets/img",
+    "karakter": "for c in ujang sobari rina dimas; do CHAR=$c python3 tools/blender/karakter/build.py || exit 1; done",
     "serve": "python3 -m http.server 5173",
     "uji:setir": "node tools/uji/setir.js",
     "uji:alur": "node tools/uji/alur.js"

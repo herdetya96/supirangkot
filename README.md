@@ -10,6 +10,7 @@ npm run serve     # buka http://localhost:5173
 npm run sim       # simulasi keseimbangan ekonomi (300 permainan per strategi)
 npm run drive     # bot sopir memainkan mini-game nyetir
 npm run assets    # buat ulang model 3D dari skrip Blender (butuh `pip install bpy`)
+npm run karakter  # buat ulang empat karakter detail tinggi (lihat art/karakter/README.md)
 ```
 
 Tidak ada build step. Satu-satunya pustaka, three.js r128 untuk tampilan 3D, disimpan di `vendor/`.
@@ -31,6 +32,8 @@ Tidak ada build step. Satu-satunya pustaka, three.js r128 untuk tampilan 3D, dis
 | `assets/img/angkot-*.webp` | Gambar angkot menu hasil render Blender |
 | `assets/models/*.glb` | Hasil ekspor skrip Blender: kendaraan, orang, bangunan, perabot jalan |
 | `assets/models.js` | Semua model dalam format ringkas (dibuat `tools/pack_models.js`) |
+| `tools/blender/karakter/` | Skrip Blender karakter detail tinggi: `build.py`, `lib.py`, `render.py`, `ambil_data.sh` |
+| `art/karakter/` | Empat tokoh cerita versi realistis (`.blend`, `.glb`, render). Tidak dipakai game |
 | `drivebot.js` | Bot sopir untuk menyeimbangkan mini-game nyetir |
 | `sim.js` | Bot yang memainkan ratusan permainan untuk menguji keseimbangan |
 | `angkot.webp` | Render angkot asli prototipe (tidak dipakai lagi) |

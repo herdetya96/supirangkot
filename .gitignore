@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 __pycache__/
 *.pyc
+tools/blender/karakter/data/
+art/karakter/.sim_cache_*.npz

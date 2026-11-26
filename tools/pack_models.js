@@ -6,7 +6,9 @@
      indeks  uint16 atau uint32
    Jalankan: node tools/pack_models.js   (ikut dijalankan oleh `npm run assets`) */
 const fs = require('fs'), path = require('path');
-const dir = path.join(__dirname, '..', 'assets', 'models');
+// node tools/pack_models.js [folder .glb] [berkas keluaran]  (bawaan assets/models -> assets/models.js)
+const dir = path.resolve(process.argv[2] || path.join(__dirname, '..', 'assets', 'models'));
+const keluar = path.resolve(process.argv[3] || path.join(__dirname, '..', 'assets', 'models.js'));
 function readGLB(buf) {
   const jl = buf.readUInt32LE(12), J = JSON.parse(buf.slice(20, 20 + jl).toString());
   const bin = buf.slice(20 + jl + 8);
@@ -58,5 +60,5 @@ for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.glb')).sort()) {
   out[f.replace(/\.glb$/, '')] = parts;
 }
 const js = '/* Dibuat oleh tools/pack_models.js dari assets/models/*.glb. Jangan diubah manual. */\nwindow.NARIK_MODEL = ' + JSON.stringify(out) + ';\n';
-fs.writeFileSync(path.join(dir, '..', 'models.js'), js);
-console.log(Object.keys(out).length, 'model →', 'assets/models.js', (js.length / 1024).toFixed(0), 'KB (data mentah', (raw / 1024).toFixed(0), 'KB)');
+fs.writeFileSync(keluar, js);
+console.log(Object.keys(out).length, 'model →', path.relative(process.cwd(), keluar), (js.length / 1024).toFixed(0), 'KB (data mentah', (raw / 1024).toFixed(0), 'KB)');

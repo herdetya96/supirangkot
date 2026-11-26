@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 tools/blender/karakter/data/
 art/karakter/.sim_cache_*.npz
+www/
+assets/models_hd/

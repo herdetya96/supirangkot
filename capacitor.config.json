@@ -1,0 +1,14 @@
+{
+  "appId": "id.cibening.narik",
+  "appName": "Narik",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "backgroundColor": "#1b2630",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "StatusBar": { "overlaysWebView": true, "style": "DARK" }
+  }
+}

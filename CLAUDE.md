@@ -23,6 +23,10 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   per karakter). Butuh `pip install bpy scipy` dan data MakeHuman dari `sh tools/blender/karakter/ambil_data.sh` (±90 MB,
   masuk `tools/blender/karakter/data/`, tidak di-commit). Ini aset seni, terpisah dari `npm run assets`.
 
+- Aplikasi iOS (Capacitor 8, proyek Xcode di `ios/`, panduan `IOS.md`): `npm run ios` = `tools/www.js` (salin game ke `www/`)
+  lalu `npx cap sync ios`; dibuka dan dijalankan di Xcode (butuh Mac). `npm run assets-hd` membuat paket model HD
+  `assets/models_hd.js` (orang `SKALA=2.5`, angkot `HALUS=2.5`, motor `SKALA=2`, rumah `DETAIL=1`; ±9 MB) untuk mode grafis Ultra.
+
 ## Arsitektur
 
 - `game.js` = semua aturan main, tanpa DOM. Diekspor sebagai `window.NARIK` dan `module.exports`.
@@ -53,6 +57,10 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   Bayar utang, Berkas sidang, Trayek, Cara main), kartu angkot dan kabar pindah ke lembar `armada`/`kabar`. Renderer,
   material, aset dipakai bersama `drive3d.js` lewat `NARIK_3D._` (`siapRen`, `mat`, `assetGeo`, `vehicleGeo`, `animMat`, ...);
   kanvasnya dipindah antara `#rm` dan layar nyetir. Kalau 3D tidak tersedia, tampilan kartu lama dipakai.
+- Mode grafis Ultra (`quality()` = 'ultra', bawaan kalau `window.Capacitor.isNativePlatform()`): seperti Tinggi ditambah rasio
+  piksel sampai 3, antialias, bayangan 4096², blok kota terlihat sampai 5200 unit, kabut lebih jauh, dan memuat
+  `assets/models_hd.js` (jatuh ke `assets/models.js` kalau tidak ada). Urutan tombol grafis: Ultra → Tinggi → Ringan.
+  Di aplikasi, getar memakai plugin Haptics (`suara.js`, `getar`) dan status bar disembunyikan (`ui.js`).
 - `drive3d.js` = tampilan 3D (`window.NARIK_3D`) memakai three.js r128 di `vendor/three.min.js` (MIT, `vendor/THREE-LICENSE`).
   Dua mode grafis (`localStorage` kunci `narik-grafis`, tombol di kartu pembuka rit):
   - **Tinggi** (bawaan, butuh WebGL2): `MeshStandardMaterial` PBR, warna linear + tone mapping ACES, peta pantulan langit

@@ -862,6 +862,7 @@ function drawHUD(c, S, H, o, proj) {
 }
 
 /* ---------- pasang di halaman ---------- */
+const MUTU = { ultra: 'Ultra', tinggi: 'Tinggi', ringan: 'Ringan' };
 const CAMS = { atas: 'Kamera atas', belakang: 'Kamera belakang', '2d': 'Peta 2D' };
 function camLoad() { try { return localStorage.getItem('narik-kamera'); } catch (e) { return null; } }
 function camSave(v) { try { localStorage.setItem('narik-kamera', v); } catch (e) { /* tanpa penyimpanan tetap jalan */ } }
@@ -886,7 +887,7 @@ function mount(host, spec, opts, done) {
         <li>Keyboard: ↑/W maju, ↓/S mundur, ←→/A/D belok, spasi rem, H klakson, C kamera.</li>${SU ? '<li>Ada suara dan getar. Matikan dengan tombol 🔊 di kiri atas.</li>' : ''}</ul>
         ${spec.wet ? '<p><b>Hujan:</b> rem licin, penumpang lebih banyak.</p>' : ''}${spec.wobble ? '<p><b>Kamu ngantuk:</b> setir agak goyang.</p>' : ''}${spec.sh === 2 ? '<p><b>Sore:</b> makin lama makin gelap.</p>' : ''}
         <p>Tarif ±Rp ${spec.tarif} rb per penumpang.</p>
-        <button class="gas" data-ny="go">Gas!</button>${R3 ? `<button class="btn-teks" data-ny="grafis">Grafis: <b>${R3.quality() === 'tinggi' ? 'Tinggi' : 'Ringan'}</b> (ketuk untuk ganti)</button>` : ''}<button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
+        <button class="gas" data-ny="go">Gas!</button>${R3 ? `<button class="btn-teks" data-ny="grafis">Grafis: <b>${MUTU[R3.quality()] || 'Tinggi'}</b> (ketuk untuk ganti)</button>` : ''}<button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
     </div>
     <div class="ny-kontrol">
       <div class="arah-grup"><button class="arah-btn" data-ny="kiri" aria-label="Belok kiri">◀</button><button class="arah-btn" data-ny="kanan" aria-label="Belok kanan">▶</button></div>
@@ -990,7 +991,8 @@ function mount(host, spec, opts, done) {
     if (a === 'kam') cycle();
     if (a === 'grafis' && R3 && !running) {
       // ganti mode grafis: bangun ulang tampilan 3D dengan material dan bayangan yang sesuai
-      const q = R3.quality() === 'tinggi' ? 'ringan' : 'tinggi'; R3.setQuality(q); b.querySelector('b').textContent = q === 'tinggi' ? 'Tinggi' : 'Ringan';
+      // Ultra -> Tinggi -> Ringan -> Ultra (model HD baru dipakai setelah game dibuka ulang)
+      const urut = ['ultra', 'tinggi', 'ringan'], q = urut[(urut.indexOf(R3.quality()) + 1) % 3]; R3.setQuality(q); b.querySelector('b').textContent = MUTU[q];
       if (r3) r3.detach();
       try { r3 = R3.create(box, S, spec, o); } catch (e) { r3 = null; }
       size();

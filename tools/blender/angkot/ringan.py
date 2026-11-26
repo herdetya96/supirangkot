@@ -33,16 +33,20 @@ WARNA = {   # material -> (hex sRGB, jenis material KELAS)
 }
 
 
+HALUS = float(os.environ.get('HALUS', '1'))   # 2.5 untuk paket model HD (npm run assets-hd)
+
+
 def target(ob, n):
-    """Jumlah segitiga yang diinginkan untuk satu objek."""
+    """Jumlah segitiga yang diinginkan untuk satu objek (HALUS > 1 = lebih rapat, untuk mode Ultra)."""
+    f = lambda r: min(1.0, r * HALUS)
     if ob.name.startswith('Wheel'):
-        return 300
+        return int(300 * HALUS)
     if ob.name == 'Body':
-        return int(n * 0.6)                         # bentuk utama: dikurangi sedikit saja
+        return int(n * f(0.6))                      # bentuk utama: dikurangi sedikit saja
     if n > 600 and ob.data.materials and len(ob.data.materials) == 1 and ob.dimensions.length < 1.0:
-        return max(140, int(n * 0.14))            # tulisan
+        return max(140, int(n * f(0.14)))           # tulisan
     if n > 120:
-        return max(90, int(n * 0.4))              # lengkungan bevel yang rapat (karet jendela, bemper, lis)
+        return max(90, int(n * f(0.4)))             # lengkungan bevel yang rapat (karet jendela, bemper, lis)
     return n
 
 

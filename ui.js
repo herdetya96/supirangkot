@@ -494,6 +494,12 @@ V.addEventListener('change', e => {
 });
 
 /* ---------- mulai ---------- */
+// aplikasi iOS/Android (Capacitor): layar penuh tanpa status bar
+(function () {
+  const Cap = window.Capacitor;
+  if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+  try { const sb = Cap.Plugins && Cap.Plugins.StatusBar ? Cap.Plugins.StatusBar : Cap.registerPlugin('StatusBar'); sb.hide(); } catch (e) { /* tetap jalan */ }
+})();
 function start(data) {
   if (data && data.save) { try { begin(JSON.parse(data.save), false); return; } catch (e) { } }
   render();

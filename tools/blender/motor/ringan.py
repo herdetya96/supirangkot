@@ -25,8 +25,8 @@ WARNA = {   # material motor -> (hex sRGB atau None = penanda CAT, jenis)
     'Ban': ('161616', 'karet'), 'Velg': ('8d9396', 'logam'), 'Kaca': ('1f2d38', 'kaca'), 'Lampu': ('fff3c4', 'kaca'),
     'Sein': ('f29b1d', 'kaca'), 'Rem': ('b3261e', 'kaca'), 'Pelat': ('15191c', 'polos'), 'Mesin': ('5a6066', 'logam'),
 }
-SEGITIGA_MOTOR = 1700
-SEGITIGA_ORANG = 2400
+SEGITIGA_MOTOR = int(1700 * float(os.environ.get('SKALA', '1')))   # SKALA > 1 untuk paket HD
+SEGITIGA_ORANG = int(2400 * float(os.environ.get('SKALA', '1')))
 DUDUK = Vector((0, -0.20, 0.885))     # titik tengah sendi pinggul pengendara
 DEK_Z = 0.36                          # permukaan dek kaki
 GRIP = Vector((0, 0.48, 1.035))       # pegangan setang

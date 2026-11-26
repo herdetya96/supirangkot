@@ -1,6 +1,6 @@
 {
   "name": "narik",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "description": "Narik — game manajemen angkot dengan cerita (prototipe Bab 1–3)",
   "scripts": {
@@ -13,6 +13,18 @@
     "uji:setir": "node tools/uji/setir.js",
     "uji:alur": "node tools/uji/alur.js",
     "motor-detail": "python3 tools/blender/motor/build.py",
-    "rumah-detail": "python3 tools/blender/rumah/build.py"
+    "rumah-detail": "python3 tools/blender/rumah/build.py",
+    "assets-hd": "rm -rf assets/models_hd && mkdir -p assets/models_hd && cp assets/models/*.glb assets/models_hd/ && SKALA=2.5 python3 tools/blender/karakter/ringan.py assets/models_hd && HALUS=2.5 python3 tools/blender/angkot/ringan.py assets/models_hd && SKALA=2 python3 tools/blender/motor/ringan.py assets/models_hd && DETAIL=1 python3 tools/blender/rumah/ringan.py assets/models_hd && node tools/pack_models.js assets/models_hd assets/models_hd.js",
+    "www": "node tools/www.js",
+    "ios": "node tools/www.js && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.6.3",
+    "@capacitor/status-bar": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.3"
   }
 }

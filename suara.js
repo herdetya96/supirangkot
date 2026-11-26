@@ -71,10 +71,26 @@ const FX = {
   mogok(t) { for (let i = 0; i < 3; i++) osc('sawtooth', 50 - i * 6, t + i * 0.22, 0.14, 0.18 - i * 0.04, { lp: 300 }); }
 };
 const BUZZ = { tabrak: 140, serempet: 50, selip: 70, lubang: 40, tilang: [50, 60, 50], mogok: [80, 60, 80] };
+// getar: di aplikasi (Capacitor) memakai Haptics bawaan iOS/Android, yang juga jalan di iPhone; di browser navigator.vibrate
+const HAPTIK = { tabrak: ['impact', 'HEAVY'], serempet: ['impact', 'MEDIUM'], selip: ['impact', 'MEDIUM'], lubang: ['impact', 'LIGHT'],
+  tilang: ['notification', 'WARNING'], mogok: ['notification', 'ERROR'] };
+let hapt = null;
+function getar(name) {
+  const Cap = root.Capacitor;
+  if (Cap && Cap.isNativePlatform && Cap.isNativePlatform()) {
+    try {
+      if (!hapt) hapt = Cap.Plugins && Cap.Plugins.Haptics ? Cap.Plugins.Haptics : Cap.registerPlugin('Haptics');
+      const [jenis, gaya] = HAPTIK[name] || ['impact', 'LIGHT'];
+      if (jenis === 'impact') hapt.impact({ style: gaya }); else hapt.notification({ type: gaya });
+      return;
+    } catch (e) { /* jatuh ke navigator.vibrate */ }
+  }
+  if (root.navigator && root.navigator.vibrate) { try { root.navigator.vibrate(BUZZ[name]); } catch (e) { /* abaikan */ } }
+}
 function play(name) {
   if (!on) return;
   if (ctx && master && FX[name] && ctx.state === 'running') FX[name](ctx.currentTime + 0.01);
-  if (BUZZ[name] && root.navigator && root.navigator.vibrate) { try { root.navigator.vibrate(BUZZ[name]); } catch (e) { /* abaikan */ } }
+  if (BUZZ[name]) getar(name);
 }
 
 /* ---------- mesin: dengung yang naik-turun dengan laju dan gas, pindah gigi di empat titik ---------- */

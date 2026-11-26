@@ -15,7 +15,9 @@ function glOK() {
 }
 function available() { return !!root.THREE && !!root.NARIK_DRIVE && glOK(); }
 // LIN: mode grafis tinggi memakai warna linear + tone mapping; semua warna palet (sRGB) dikonversi di sini
-let LIN = false, HI = false;
+let LIN = false, HI = false, ULTRA = false;
+// aplikasi iOS/Android (Capacitor): bawaan grafis Ultra, karena paket model HD ikut di dalam aplikasi
+const NATIVE = !!(root.Capacitor && root.Capacitor.isNativePlatform && root.Capacitor.isNativePlatform());
 function C(hex) { const k = (LIN ? 'L' : 'S') + hex; return COLS[k] || (COLS[k] = LIN ? new root.THREE.Color(hex).convertSRGBToLinear() : new root.THREE.Color(hex)); }
 const rotOf = a => -a - Math.PI / 2;            // arah jalan → rotation.y benda yang menghadap -Z
 
@@ -78,8 +80,12 @@ function loadAssets() {
   AS.state = 'memuat';
   const bundle = () => new Promise(res => {
     if (root.NARIK_MODEL) { res(true); return; }
-    const sc = document.createElement('script'); sc.src = 'assets/models.js'; sc.async = true;
-    sc.onload = () => res(!!root.NARIK_MODEL); sc.onerror = () => res(false); document.head.appendChild(sc);
+    // Ultra: paket model HD (npm run assets-hd); kalau tidak ada, kembali ke paket biasa
+    const muat = (src, lagi) => {
+      const sc = document.createElement('script'); sc.src = src; sc.async = true;
+      sc.onload = () => res(!!root.NARIK_MODEL); sc.onerror = () => { if (lagi) muat(lagi, null); else res(false); }; document.head.appendChild(sc);
+    };
+    if (quality() === 'ultra') muat('assets/models_hd.js', 'assets/models.js'); else muat('assets/models.js', null);
   });
   AS.promise = Promise.all([bundle(), loadDetail()]).then(([ok, det]) => {
     AS.det = det;
@@ -672,7 +678,9 @@ function landmark(Wd, L, A) {
 }
 
 /* ---------- penggambar per rit ---------- */
-function quality() { try { return localStorage.getItem('narik-grafis') || 'tinggi'; } catch (e) { return 'tinggi'; } }
+// mode grafis: 'ultra' (resolusi Retina penuh, bayangan 4096, model HD, pandangan lebih jauh; bawaan di aplikasi),
+// 'tinggi' (bawaan di browser), 'ringan'
+function quality() { try { return localStorage.getItem('narik-grafis') || (NATIVE ? 'ultra' : 'tinggi'); } catch (e) { return NATIVE ? 'ultra' : 'tinggi'; } }
 function setQuality(q) { try { localStorage.setItem('narik-grafis', q); } catch (e) { /* tetap jalan tanpa penyimpanan */ } }
 let ENVT = null;
 function envMap() {
@@ -692,10 +700,11 @@ function siapRen() {
   // 'tinggi' (PBR, tekstur Blender, bayangan) butuh WebGL2; 'ringan' = Lambert tanpa bayangan
   const T = root.THREE;
   if (!REN) {
-    REN = new T.WebGLRenderer({ antialias: (root.devicePixelRatio || 1) < 2, powerPreference: 'high-performance' });
-    REN.setPixelRatio(Math.min(1.5, root.devicePixelRatio || 1));
+    REN = new T.WebGLRenderer({ antialias: quality() === 'ultra' || (root.devicePixelRatio || 1) < 2, powerPreference: 'high-performance' });
   }
-  HI = quality() === 'tinggi' && REN.capabilities.isWebGL2; LIN = HI;
+  const q = quality();
+  HI = (q === 'tinggi' || q === 'ultra') && REN.capabilities.isWebGL2; LIN = HI; ULTRA = HI && q === 'ultra';
+  REN.setPixelRatio(Math.min(ULTRA ? 3 : 1.5, root.devicePixelRatio || 1));
   REN.outputEncoding = HI ? T.sRGBEncoding : T.LinearEncoding;
   REN.toneMapping = HI ? T.ACESFilmicToneMapping : T.NoToneMapping; REN.toneMappingExposure = 1.0;
   REN.shadowMap.enabled = HI; REN.shadowMap.type = T.PCFSoftShadowMap;
@@ -726,14 +735,14 @@ function createImpl(canvas, S, spec, o) {
   const st = buildStatic(Wd);
   const scene = new T.Scene(); scene.add(st.grp);
   const dyn = new T.Group(); scene.add(dyn);
-  const cam = new T.PerspectiveCamera(66, 0.5, 4, 3200);
+  const cam = new T.PerspectiveCamera(66, 0.5, 4, ULTRA ? 4600 : 3200);
   const hemi = new T.HemisphereLight(0xffffff, 0x7a8a5a, 0.75); scene.add(hemi);
   const sun = new T.DirectionalLight(0xffffff, 0.8); sun.position.set(-0.5, 1, 0.3); scene.add(sun); scene.add(sun.target);
   const head = new T.SpotLight(0xfff2cc, 0, 900, 0.55, 0.6, 1.2); scene.add(head); scene.add(head.target);
   if (HI) {
     hemi.color.copy(C('#dfeaf2')); hemi.groundColor.copy(C('#6f6a55'));
     scene.environment = envMap();
-    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+    sun.castShadow = true; sun.shadow.mapSize.set(ULTRA ? 4096 : 2048, ULTRA ? 4096 : 2048);
     const sc2 = sun.shadow.camera; sc2.left = -720; sc2.right = 720; sc2.top = 720; sc2.bottom = -720; sc2.near = 50; sc2.far = 4000; sc2.updateProjectionMatrix();
     sun.shadow.bias = -0.0006; sun.shadow.normalBias = 1.5;
   }
@@ -970,11 +979,11 @@ function createImpl(canvas, S, spec, o) {
     const sh = S.shake && !o.reduce ? 6 : 0;
     cam.position.set(camPos[0] + (Math.random() - 0.5) * sh, camPos[1] + (Math.random() - 0.5) * sh, camPos[2] + (Math.random() - 0.5) * sh);
     cam.fov = (low ? 70 : 64) + sp * 7; cam.updateProjectionMatrix(); cam.lookAt(camLook[0], camLook[1], camLook[2]);
-    scene.fog.near = low ? 700 : 1000; scene.fog.far = low ? 2300 : 2900;
+    scene.fog.near = low ? 700 : ULTRA ? 1500 : 1000; scene.fog.far = low ? 2300 : ULTRA ? 4200 : 2900;
     // matahari (dan kotak bayangannya) ikut titik pandang kamera
     sun.position.set(camLook[0] - 700, 1400, camLook[2] + 450); sun.target.position.set(camLook[0], 0, camLook[2]);
     // blok kota yang jauh disembunyikan (juga dari bayangan)
-    for (const ch of st.chunks) { const dx = ch.userData.c[0] - camLook[0], dz = ch.userData.c[1] - camLook[2]; ch.visible = dx * dx + dz * dz < 3600 * 3600; }
+    for (const ch of st.chunks) { const dx = ch.userData.c[0] - camLook[0], dz = ch.userData.c[1] - camLook[2]; ch.visible = dx * dx + dz * dz < (ULTRA ? 5200 * 5200 : 3600 * 3600); }
     if (head.intensity > 0) { const hp = P(d + 30, S.x - 180, 40), ht = P(d + 400, S.x - 180, 0); head.position.set(hp[0], hp[1], hp[2]); head.target.position.set(ht[0], ht[1], ht[2]); }
     if (rain) { rain.position.set(camLook[0], 0, camLook[2]); const pos = rain.geometry.attributes.position.array; for (let i = 0; i < pos.length; i += 6) { let y = pos[i + 1] - 900 * dt; if (y < 0) y += 500; pos[i + 1] = y; pos[i + 4] = y - 18; } rain.geometry.attributes.position.needsUpdate = true; }
     REN.render(scene, cam);
@@ -994,7 +1003,7 @@ function createImpl(canvas, S, spec, o) {
 const API = { available, create, loadAssets, quality, setQuality, assets: AS, _static: STATIC,
   // bagian dalam untuk adegan lain (rumah3d.js) supaya renderer, material, dan aset dipakai bersama
   _: { siapRen, mat, C, assetGeo, vehicleGeo, hasAsset, animMat, animShader, sendiOf, envMap, M2U, ORANG, HAIR, CELANA,
-    get HI() { return HI; } } };
+    get HI() { return HI; }, get ULTRA() { return ULTRA; }, NATIVE } };
 if (available()) loadAssets();
 root.NARIK_3D = API;
 })(typeof window !== 'undefined' ? window : globalThis);

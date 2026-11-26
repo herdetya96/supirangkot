@@ -67,6 +67,11 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
 20. "Rumah masih sangat jelek, buat 3D di Blender". Dibuat rumah kampung detail dengan garasi samping (`art/rumah`,
     `tools/blender/rumah/`), dipakai di adegan rumah; angkot sekarang keluar gerbang dan mundur masuk garasi.
 
+21. "Buat ini iOS app jadi biar lebih detail". Dibungkus Capacitor 8 (`ios/`, `IOS.md`), mode grafis Ultra dengan paket
+    model HD, Haptics. Belum pernah dikompilasi (tidak ada Mac/Xcode di sesi cloud). Dijelaskan ke pengguna bahwa aplikasi
+    web-dalam-aplikasi tidak otomatis lebih detail; detailnya dari paket HD dan resolusi penuh. Alternatif yang belum
+    dikerjakan: menulis ulang dengan mesin native (SceneKit/RealityKit/Unity), pekerjaan sangat besar.
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 

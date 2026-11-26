@@ -30,6 +30,8 @@ import build_assets as B   # noqa: E402
 TOKOH = ('ujang', 'sobari', 'rina', 'dimas')
 # segitiga per bagian
 TARGET = {'kulit': 1900, 'baju': 1500, 'celana': 650, 'rambut': 550, 'lain': 700}
+# SKALA=2.5 untuk paket model HD (npm run assets-hd, mode grafis Ultra)
+TARGET = {k: int(v * float(os.environ.get('SKALA', '1'))) for k, v in TARGET.items()}
 BAGIAN = {   # nama material -> bagian, warna tetap (hex) untuk 'lain', jenis material
     'Kulit_Realistis': ('kulit', None, 'polos'), 'Kemeja': ('baju', None, 'kain'), 'Celana': ('celana', None, 'kain'),
     'Mata_Tekstur': ('lain', '2a211c', 'polos'), 'Mata_Kornea': (None, None, None),

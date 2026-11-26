@@ -26,7 +26,10 @@ function readGLB(buf) {
   for (const node of J.nodes) {
     if (node.mesh == null) continue;
     const pr = J.meshes[node.mesh].primitives[0];
-    meshes[node.name] = { pos: acc(pr.attributes.POSITION), nrm: pr.attributes.NORMAL != null ? acc(pr.attributes.NORMAL) : null, col: pr.attributes.COLOR_0 != null ? acc(pr.attributes.COLOR_0) : null, idx: pr.indices != null ? acc(pr.indices) : null, t: node.translation || [0, 0, 0] };
+    // atribut khusus glTF (nama diawali _, mis. bobot kerangka orang) dan custom property mesh (extras) ikut dibawa
+    const extra = {}; for (const k of Object.keys(pr.attributes)) if (k[0] === '_') extra[k.slice(1)] = acc(pr.attributes[k]);
+    const ex = (J.meshes[node.mesh].extras) || node.extras || null;
+    meshes[node.name] = { pos: acc(pr.attributes.POSITION), nrm: pr.attributes.NORMAL != null ? acc(pr.attributes.NORMAL) : null, col: pr.attributes.COLOR_0 != null ? acc(pr.attributes.COLOR_0) : null, idx: pr.indices != null ? acc(pr.indices) : null, t: node.translation || [0, 0, 0], extra, ex };
   }
   return meshes;
 }
@@ -46,6 +49,10 @@ for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.glb')).sort()) {
     for (let i = 0; i < n; i++) for (let c = 0; c < 4; c++) qc[i * 4 + c] = m.col ? Math.round(m.col.data[i * m.col.comp + c] * 255) : (c < 3 ? 255 : 0);
     const I = m.idx ? (n > 65535 ? Uint32Array : Uint16Array).from(m.idx.data) : null;
     parts[name] = { n, min: mn.map(v => +v.toFixed(5)), size: size.map(v => +v.toFixed(5)), p: b64(qp), nr: b64(qn), c: b64(qc), i: I ? b64(I) : null, i32: I instanceof Uint32Array };
+    // atribut khusus: uint8 0..255 (bobot 0..1)
+    const xk = Object.keys(m.extra);
+    if (xk.length) { parts[name].x = {}; for (const k of xk) { const a = m.extra[k], q = new Uint8Array(n); for (let i = 0; i < n; i++) q[i] = Math.max(0, Math.min(255, Math.round(a.data[i * a.comp] * 255))); parts[name].x[k] = b64(q); raw += n; } }
+    if (m.ex) parts[name].ex = m.ex;
     raw += qp.byteLength + qn.byteLength + qc.byteLength + (I ? I.byteLength : 0);
   }
   out[f.replace(/\.glb$/, '')] = parts;

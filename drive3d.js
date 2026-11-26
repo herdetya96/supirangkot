@@ -45,6 +45,12 @@ function decode(m) {
   g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('normal', new T.BufferAttribute(nrm, 3));
   g.setAttribute('color', new T.BufferAttribute(col, 3)); g.setAttribute('cls', new T.BufferAttribute(cls, 1));
   if (m.i) g.setIndex(new T.BufferAttribute(b64(m.i, m.i32 ? Uint32Array : Uint16Array), 1));
+  if (m.x && m.x.LEGL) {
+    // bobot kerangka orang (tools/blender/karakter/ringan.py): sk1 = kaki kiri, kaki kanan, betis kiri, betis kanan; sk2 = lengan
+    const q = k => b64(m.x[k], Uint8Array), sk = ks => { const a = ks.map(q), o = new Float32Array(n * 4); for (let i = 0; i < n; i++) for (let c = 0; c < 4; c++) o[i * 4 + c] = a[c][i] / 255; return o; };
+    g.setAttribute('sk1', new T.BufferAttribute(sk(['LEGL', 'LEGR', 'KNEEL', 'KNEER']), 4)); g.setAttribute('sk2', new T.BufferAttribute(sk(['ARML', 'ARMR', 'ELBL', 'ELBR']), 4));
+  }
+  if (m.ex) g.userData.ex = m.ex;
   g.computeBoundingSphere(); return g;
 }
 function loadDetail() {
@@ -158,6 +164,48 @@ function mat(o) {
   const m = new T.MeshStandardMaterial({ vertexColors: !!o.vc, color: o.color != null ? C(o.color) : 0xffffff, roughness: 0.8, metalness: 0, emissive: o.emissive || 0 });
   if (AS.det) { m.onBeforeCompile = sh => inject(sh, !!o.obj); m.customProgramCacheKey = () => 'narik-det' + (o.obj ? 'o' : 'w'); }
   return m;
+}
+/* ---------- animasi orang di vertex shader ----------
+   Tiap titik membawa bobot kaki/betis/lengan/lengan bawah (sk1, sk2). Tiap orang membawa aAnim = (fase, langkah 0..1,
+   lambai 0..1, -). Sudut sendi dihitung dari aAnim, lalu titik diputar di sekitar sendi (sumbu X, positif = ke depan):
+   betis di lutut, lalu seluruh kaki di pinggul; lengan bawah di siku, lalu seluruh lengan di bahu. Murah untuk ratusan orang. */
+const ANIM_GLSL = `
+attribute vec4 sk1; attribute vec4 sk2; attribute vec4 aAnim; uniform vec3 uJ[8];
+float aHL, aHR, aKL, aKR, aSL, aSR, aEL, aER;
+void sudut() {
+  float ph = aAnim.x, am = aAnim.y, wv = aAnim.z, s = sin(ph), c = cos(ph);
+  aHL = 0.42 * am * s; aHR = -aHL;
+  aKL = -am * (0.10 + 0.75 * max(0.0, c)); aKR = -am * (0.10 + 0.75 * max(0.0, -c));
+  aSL = -0.36 * am * s; aSR = -aSL; aEL = 0.22 * am; aER = aEL;
+  aSR = mix(aSR, 1.5, wv); aER = mix(aER, 1.3 + 0.35 * sin(ph), wv);
+}
+vec3 rx(vec3 p, vec3 o, float a) { float s = sin(a), c = cos(a); vec3 q = p - o; return o + vec3(q.x, q.y * c - q.z * s, q.y * s + q.z * c); }
+vec3 pose(vec3 p, float n) {
+  vec3 z = vec3(0.0);
+  p = rx(p, z + uJ[2] * (1.0 - n), aKL * sk1.z); p = rx(p, z + uJ[3] * (1.0 - n), aKR * sk1.w);
+  p = rx(p, z + uJ[0] * (1.0 - n), aHL * sk1.x); p = rx(p, z + uJ[1] * (1.0 - n), aHR * sk1.y);
+  p = rx(p, z + uJ[6] * (1.0 - n), aEL * sk2.z); p = rx(p, z + uJ[7] * (1.0 - n), aER * sk2.w);
+  p = rx(p, z + uJ[4] * (1.0 - n), aSL * sk2.x); p = rx(p, z + uJ[5] * (1.0 - n), aSR * sk2.y);
+  return p;
+}
+`;
+function animShader(sh, J) {
+  sh.uniforms.uJ = { value: J };
+  sh.vertexShader = ANIM_GLSL + sh.vertexShader
+    .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n sudut(); objectNormal = pose(objectNormal, 1.0);')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n sudut(); transformed = pose(transformed, 0.0);');
+}
+function animMat(m, J) {
+  // sendi: meter di ruang Blender (z atas) -> unit three.js (y atas, z = -y Blender)
+  const prev = m.onBeforeCompile, key = m.customProgramCacheKey;
+  m.onBeforeCompile = (sh, r) => { if (prev) prev.call(m, sh, r); animShader(sh, J); };
+  m.customProgramCacheKey = () => (key ? key.call(m) : '') + 'anim';
+  return m;
+}
+function sendiOf(g) {
+  const T = root.THREE, s = g.userData.ex && g.userData.ex.sendi; if (!s) return null;
+  const J = []; for (let i = 0; i < 8; i++) J.push(new T.Vector3(s[i * 3] * M2U, s[i * 3 + 2] * M2U, -s[i * 3 + 1] * M2U));
+  return J;
 }
 const HELM = ['#e33b2f', '#ffcc00', '#f2f2f2', '#3399ff', '#1b1b1b', '#33aa55', '#ff8800', '#cc33cc'];
 const RAMBUT = ['#1b1714', '#2a221c', '#1b1714', '#f2f2f2', '#d9a1b8', '#3e6fb1', '#1b1714', '#6b3b2a'];
@@ -716,8 +764,19 @@ function createImpl(canvas, S, spec, o) {
   const VAR = ORANG.every(hasAsset) ? ORANG : hasAsset('orang') ? ['orang'] : [null];
   const pv = VAR.map(name => {
     const PARTS = name ? ['celana', 'baju', 'kulit', 'rambut', 'lain'].filter(k => AS.geo[name][k]).map(k => [k, assetGeo(name, k)]) : [['baju', U.body], ['kulit', U.head]];
-    return { n: 0, pm: PARTS.map(([k, g]) => { const m = new T.InstancedMesh(g, mat({ vc: !!name, obj: true }), NP); m.frustumCulled = false; m.castShadow = true; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m }; }) };
+    const kul = PARTS.find(([k]) => k === 'kulit'), J = kul && name ? sendiOf(kul[1]) : null;
+    const anim = new T.InstancedBufferAttribute(new Float32Array(NP * 4), 4); anim.setUsage(T.DynamicDrawUsage);
+    return { n: 0, anim, pm: PARTS.map(([k, g]) => {
+      const ma = mat({ vc: !!name, obj: true }), m = new T.InstancedMesh(g, J && g.getAttribute('sk1') ? animMat(ma, J) : ma, NP);
+      if (J && g.getAttribute('sk1')) {
+        g.setAttribute('aAnim', anim);
+        const dm = new T.MeshDepthMaterial({ depthPacking: T.RGBADepthPacking }); dm.onBeforeCompile = sh => animShader(sh, J); m.customDepthMaterial = dm; mats.push(dm);
+      }
+      mats.push(ma); m.frustumCulled = false; m.castShadow = true; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m };
+    }) };
   });
+  // orang yang sedang berjalan sebentar: naik ke pintu angkot, turun ke trotoar (hanya tampilan)
+  const walkers = []; let prevRiders = 0;
   const dummy = new T.Object3D();
   // penanda penumpang dan kotak berhenti
   const markMat = mat({ color: '#ffd400' }); markMat.emissive = C('#806a00').clone(); mats.push(markMat);
@@ -795,6 +854,41 @@ function createImpl(canvas, S, spec, o) {
     st.lampMat.emissiveIntensity = dark * 1.6; head.intensity = dark > 0.2 ? dark * 2.2 : 0;
     return dark;
   }
+  // penumpang naik: dari tempatnya berdiri berjalan ke pintu angkot (kiri, sedikit di belakang tengah), lalu hilang ke dalam.
+  // penumpang turun: keluar dari pintu, ke trotoar, lalu berjalan pergi. Angka penumpang tetap diatur Sim; ini hanya tampilan.
+  const DOOR_D = -12, DOOR_U = -24;
+  function spawnNaik(g, i0, k) {
+    const b = g.taken === 'biru' ? S.biru.reduce((m, x) => (!m || Math.abs(x.d - g.d) < Math.abs(m.d - g.d) ? x : m), null) : null;
+    for (let i = i0; i < i0 + k && walkers.length < 24; i++) {
+      const h = A.hash(Math.floor(g.d) + i);
+      walkers.push({ d: g.d + 10 - i * 11, u: -128 + (i % 2) * 10, h, age: -0.12 * (i - i0), ph: 0, mode: 'naik', car: b });
+    }
+  }
+  function spawnTurun(m) {
+    for (let j = 0; j < m && walkers.length < 24; j++) {
+      const h = A.hash(Math.floor(S.t * 997) + j * 13);
+      walkers.push({ d: S.d + DOOR_D, u: S.x - 180 + DOOR_U + 6, h, age: -0.35 * j, ph: 0, mode: 'turun', dir: h % 2 ? 1 : -1 });
+    }
+  }
+  function walk(dt, person) {
+    // deteksi naik/turun dari perubahan angka di Sim
+    for (const g of S.groups) { if (g._vn == null) g._vn = g.n; if (g.n < g._vn) spawnNaik(g, g.n, g._vn - g.n); g._vn = g.n; }
+    if (S.riders.length < prevRiders && Math.abs(S.v) < 40) spawnTurun(prevRiders - S.riders.length);
+    prevRiders = S.riders.length;
+    for (let k = walkers.length - 1; k >= 0; k--) {
+      const w = walkers[k]; w.age += dt;
+      if (w.age < 0) { person(w.d, w.u, 4, rotOf(Wd.at(w.d).a) - Math.PI / 2, A.SHIRT[w.h % 8], A.SKIN[(w.h >>> 3) % 4], w.h >>> 6); continue; }
+      let td, tu;
+      if (w.mode === 'naik') { const c = w.car || { d: S.d, x: S.x }; td = c.d + DOOR_D; tu = c.x - 180 + DOOR_U; }
+      else if (w.u > -118) { td = w.d + w.dir * 8; tu = -124; }
+      else { td = w.d + w.dir * 60; tu = -124; }
+      const pa = P(w.d, w.u, 0), pb = P(td, tu, 0), dx = pb[0] - pa[0], dz = pb[2] - pa[2], dist = Math.hypot(dx, dz);
+      const sp = 38 * dt, f = dist > 1e-3 ? Math.min(1, sp / dist) : 0;
+      w.d += (td - w.d) * f; w.u += (tu - w.u) * f; w.ph += Math.min(sp, dist) * 0.21;
+      if ((w.mode === 'naik' && (dist < 5 || w.age > 3.5)) || (w.mode === 'turun' && w.age > 5)) { walkers.splice(k, 1); continue; }
+      person(w.d, w.u, 4, Math.atan2(-dx, -dz), A.SHIRT[w.h % 8], A.SKIN[(w.h >>> 3) % 4], w.h >>> 6, null, w.ph, 1, 0);
+    }
+  }
   function render(dt, mode) {
     const d = S.d, t = S.t, pc = Wd.at(d), dA = d - 600, dB = d + 2700;
     // pemain
@@ -818,9 +912,10 @@ function createImpl(canvas, S, spec, o) {
     for (; xi < xcars.length; xi++) xcars[xi].visible = false;
     // orang
     let mi = 0; for (const v of pv) v.n = 0;
-    const person = (d2, u, y, ry, shirt, skin, h, vi) => {
+    const person = (d2, u, y, ry, shirt, skin, h, vi, ph, am, wv) => {
       const v = pv[(vi != null ? vi : ((h || 0) >>> 2)) % pv.length]; if (v.n >= NP) return;
       const q = P(d2, u, y); dummy.position.set(q[0], q[1], q[2]); dummy.rotation.set(0, ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+      const aa = v.anim.array, o = v.n * 4; aa[o] = ph || 0; aa[o + 1] = am || 0; aa[o + 2] = wv || 0;
       const col = { baju: shirt, kulit: skin, celana: CELANA[(h || 0) % CELANA.length], rambut: VAR[0] === ORANG[0] ? HAIR[(h || 0) % HAIR.length] : RAMBUT[(h || 0) % RAMBUT.length], lain: '#ffffff' };
       for (const p of v.pm) { p.m.setMatrixAt(v.n, dummy.matrix); p.m.setColorAt(v.n, C(col[p.k])); }
       v.n++;
@@ -828,7 +923,9 @@ function createImpl(canvas, S, spec, o) {
     for (const g of S.groups) {
       if (g.n <= 0 || g.d < dA || g.d > d + 1600) { continue; }
       const ry = rotOf(Wd.at(g.d).a) - Math.PI / 2;
-      for (let i = 0; i < g.n; i++) { const h = A.hash(Math.floor(g.d) + i); person(g.d + 10 - i * 11, -128 + (i % 2) * 10, 4 + (i === 0 ? Math.abs(Math.sin(t * 7 + g.d)) * 7 : 0), ry, A.SHIRT[h % 8], A.SKIN[(h >>> 3) % 4], h >>> 6); }
+      // orang terdepan melambai ke angkot yang mendekat
+      const wave = g.d > d - 40 && g.d < d + 1200 ? 1 : 0;
+      for (let i = 0; i < g.n; i++) { const h = A.hash(Math.floor(g.d) + i); person(g.d + 10 - i * 11, -128 + (i % 2) * 10, 4, ry, A.SHIRT[h % 8], A.SKIN[(h >>> 3) % 4], h >>> 6, null, t * 9 + i, 0, i === 0 ? wave : 0); }
       if (mi < marks.length && g.d < d + 1100) {
         const m = marks[mi], z = zones[mi]; mi++;
         const q = P(g.d, -128, 70 + Math.sin(t * 3 + g.d) * 6); m.position.set(q[0], q[1], q[2]); m.rotation.y = t * 2; m.visible = true;
@@ -836,9 +933,10 @@ function createImpl(canvas, S, spec, o) {
       }
     }
     for (; mi < marks.length; mi++) { marks[mi].visible = false; zones[mi].visible = false; }
-    for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB || Wd.inJ(pd, 40)) continue; person(pd, pr.u, 4 + Math.abs(Math.sin(t * 8 + pr.h)) * 2, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4], pr.h >>> 6); }
+    for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB || Wd.inJ(pd, 40)) continue; person(pd, pr.u, 4, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4], pr.h >>> 6, null, pd * 0.2 + pr.h, Math.min(1, Math.abs(pr.v) / 30)); }
+    walk(Math.min(0.1, dt || 0), person);
     for (const pl of S.police) if (pl.d > dA && pl.d < dB) person(pl.d, -126, 4, rotOf(Wd.at(pl.d).a) - Math.PI / 2, '#5b4a2e', '#8d5a3b', 0, 0);
-    for (const v of pv) for (const p of v.pm) { p.m.count = v.n; p.m.instanceMatrix.needsUpdate = true; if (p.m.instanceColor) p.m.instanceColor.needsUpdate = true; }
+    for (const v of pv) { v.anim.needsUpdate = true; for (const p of v.pm) { p.m.count = v.n; p.m.instanceMatrix.needsUpdate = true; if (p.m.instanceColor) p.m.instanceColor.needsUpdate = true; } }
     // lampu dan palang
     for (const tl of tls) {
       const stt = S.lightState(tl.L);

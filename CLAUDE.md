@@ -81,7 +81,8 @@ Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, 
   kiri/kanan" muncul sebelumnya). Daya belok dibatasi cengkeraman `A_LAT` (tikungan jalan pas di 235, 90% saat hujan),
   jadi ngebut = melebar ke tepi = kebablasan secara fisik. Dilepas, setir lurus dan angkot pelan-pelan sejajar jalan
   (bantuan tidak cukup untuk tikungan). Menabrak tepi di atas laju 110 = kebablasan/nyenggol.
-Bot jempol (reaksi 0,25 dtk): tombol lajur 14,1 penumpang, Rp 106 rb per rit; setir bebas 13,5 penumpang, Rp 96 rb.
+Bot jempol (reaksi 0,25 dtk, pelan di persimpangan): tombol lajur 12,9 penumpang, Rp 97 rb per rit; setir bebas 11,2 penumpang,
+Rp 78 rb (menepi dengan setir sungguhan lebih lambat: geser ke samping = laju × sin sudut).
 Tombol MUNDUR dan klakson di tengah, pedal REM dan GAS di kanan. Tanpa gas angkot melambat sendiri (`COAST` 75/dtk²).
 Gigi mundur (`inp.mundur`, tombol MUNDUR/MAJU atau R): gas mendorong ke belakang sampai `V_REV` 90; kalau angkot masih
 bergerak ke arah lain, gas mengerem dulu. Mundur menabrak kendaraan di belakang = serempet. Lampu mundur putih di 2D dan 3D.
@@ -95,7 +96,7 @@ waktu rit tetap sama dengan waktu nyata. Tombol Lanjut di ringkasan dikunci 0,7 
 ditahan tidak menutupnya.
 
 - Peta: `buildWorld(trayek)` membuat rute tetap per trayek dari seed nomor trayek (sama setiap main):
-  ruas lurus dan tikungan 90° bergantian, 10–12 perempatan (sekitar 60% berlampu merah), satu sungai dengan jembatan,
+  ruas lurus dan persimpangan tempat rute belok 90° (kiri dan kanan bergantian, `Wd.junctions`: perempatan atau pertigaan), 10–12 perempatan (sekitar 60% berlampu merah), satu sungai dengan jembatan,
   satu perlintasan kereta, dan lima landmark (05: Terminal, Masjid, SD, SPBU, Pasar Baru; 09 berakhir di Kampus;
   12 dari Pasar Baru ke Stasiun dan Griya Asri). Bangunan pinggir jalan, tiang listrik, pejalan, dan kampung di
   belakang dibuat dari hash dan dicek tidak menimpa jalan (`Wd.blocked`).
@@ -104,7 +105,14 @@ ditahan tidak menutupnya.
   yang kelewatan tidak bayar.
 - Lampu merah: siklus 16 dtk (hijau 11, kuning 1,5, merah 3,5). Palang kereta: 22 dtk, tertutup 6,5 dtk. Menerobos = tilang
   Rp 75 rb. Saat merah ada mobil melintas, dan saat palang tertutup kereta lewat; ditabrak = ganti rugi.
-- Tikungan: lihat dua cara setir di atas. Tanpa dorongan ke samping di mode tombol lajur; di setir bebas, fisika arah hadap.
+- Belok di persimpangan: kotak simpang 444 × 444 (lebar jalan dua arah dengan trotoar), lengan 'lurus' dan/atau 'seberang'
+  (perempatan punya keduanya, pertigaan salah satu), panah belok di aspal, zebra. Lintasan belok kiri R 142 (memutari pojok
+  dalam), kanan R 302 (menyeberangi kotak); busurnya pas di dalam kotak. Lajur dalam lebih sempit: `Wd.radius(d, x)`, dan
+  `Wd.sf(d, x)` mempercepat d di lajur dalam supaya laju nyata sama. Laju belok aman `S.turnV(d, x)` = √(`A_LAT` 200 × jari-jari):
+  kiri lajur tengah ±168 (30 km/j), lajur trotoar ±117, kanan ±246. Banner biru "Perempatan: ↰ belok kiri" dan peringatan
+  kuning laju maks muncul 560 unit sebelumnya. Setir bebas: memutar setir ke arah belokan (>0,2) menyalakan bantuan belok
+  (angkot mengikuti lintasan); tidak membelok = menabrak tepi = kebablasan sekali, sisa belokan dibantu. Tombol lajur dan bot:
+  jalan membelokkan sendiri, ngebut menumpuk selip sampai `SLIDE_MAX`. Bot rapi mengerem untuk `turnV`.
 - Kendaraan searah (motor, mobil, pikap, truk, angkot biru) ikut berhenti di lampu merah dan di belakang kendaraan lain.
   Kendaraan arah berlawanan hanya hiasan.
 - Tarif per penumpang = pendapatan rit dasar × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (12,5).
@@ -114,9 +122,9 @@ Hasil `drivebot.js` (200 rit, tiga trayek), dibanding pendapatan mode "Narik bia
 
 | Bot | Ongkos | Naik | Serempet | Kebablasan | Kelewatan | Tilang |
 |---|---|---|---|---|---|---|
-| Rapi (patuh lampu, pelan di tikungan, berhenti untuk "kiri") | 1,10× | 13,5 | 0,9 | 0 | 0 | 0 |
-| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,80× | 15,6 | 2,7 | 6,6 | 5,7 | 0,3 |
-| Nekat (rapi tapi terobos lampu, ngebut di tikungan) | 1,24× kotor | 15,1 | 1,3 | 5,6 | 0 | 1,1 |
+| Rapi (patuh lampu, pelan di persimpangan, berhenti untuk "kiri") | 1,11× | 13,6 | 1,1 | 0 | 0 | 0 |
+| Ceroboh (abaikan "kiri", tidak hati-hati) | 0,81× | 15,8 | 2,8 | 6,3 | 5,7 | 0,3 |
+| Nekat (rapi tapi terobos lampu, ngebut di persimpangan) | 1,25× kotor | 15,3 | 1,7 | 5,5 | 0 | 1,2 |
 
 Nekat dapat ongkos kotor ±Rp 13 rb lebih besar, tapi tilang (±Rp 75 rb per kejadian) dan ganti rugi tabrakan membuatnya rugi bersih.
 Bot belum pernah diuji melawan tangan manusia di HP.

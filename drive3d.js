@@ -310,8 +310,11 @@ function buildStatic(Wd) {
   const ASP = '#3e474f', SW = '#d6ccb2', CURB = '#bdb39a';
   const strip = (dA, dB, u0, u1, y, col) => { const a = P(dA, u0, y), b = P(dA, u1, y), c = P(dB, u1, y), d = P(dB, u0, y); R.quad(a, b, c, d, col); };
   const wall = (dA, dB, u, y0, y1, col, faceRight) => { const a = P(dA, u, y0), b = P(dB, u, y0), c = P(dB, u, y1), d = P(dA, u, y1); if (faceRight) R.quad(a, b, c, d, col); else R.quad(b, a, d, c, col); };
-  for (let d = A.DMIN; d < dEnd; d += 16) {
-    const e = d + 16, cr = inCross(d + 8, 62);
+  // potong pita jalan di tepi kotak simpang (kotak simpang digambar terpisah di bawah)
+  const clipJ = (d, e) => { for (const j of Wd.junctions) { if (d >= j.d0 && e <= j.d1) return null; if (d < j.d0 && e > j.d0) e = j.d0; if (d < j.d1 && e > j.d1) d = j.d1; } return [d, e]; };
+  for (let d0 = A.DMIN; d0 < dEnd; d0 += 16) {
+    const cj = clipJ(d0, d0 + 16); if (!cj) continue;
+    const [d, e] = cj, cr = inCross(d + 8, 62);
     R.kls('aspal'); strip(d, e, -110, 270, 0.5, ASP);
     if (!cr) {
       R.kls('paving'); strip(d, e, -142, -110, 4, SW); strip(d, e, 270, 302, 4, SW);
@@ -321,7 +324,7 @@ function buildStatic(Wd) {
     }
   }
   for (let d = Math.floor(A.DMIN / 44) * 44; d < dEnd; d += 44) {
-    if (inCross(d + 11, 70)) continue;
+    if (inCross(d + 11, 70) || Wd.inJ(d + 11, 12)) continue;
     R.kls('polos');
     for (const u of [-37, 37, 197]) strip(d, d + 22, u - 1.5, u + 1.5, 0.8, u === 197 ? '#f0f0f0' : '#f4f4f4');
   }
@@ -335,6 +338,40 @@ function buildStatic(Wd) {
     for (let u = 130; u < 266; u += 18) rect(c.d, 46, 62, u, u + 9, 1.2, '#f2f2f2');
     rect(c.d, -72, -67, -110, 110, 1.2, '#ffffff'); rect(c.d, 67, 72, 124, 270, 1.2, '#ffffff');
     for (let u = -700; u < 900; u += 44) if (u < -150 || u > 310) rect(c.d, -1.5, 1.5, u, u + 22, 1.2, '#e8e8e8');
+  }
+  // persimpangan tempat rute berbelok: kotak aspal, pojok trotoar, lengan jalan (perempatan / pertigaan)
+  for (const j of Wd.junctions) {
+    const Lq = (al, u, y) => { const q = j.L(al, u); return [q[0], y, q[1]]; };
+    const box = (a0, a1, u0, u1, y, col) => R.quad(Lq(a0, u0, y), Lq(a0, u1, y), Lq(a1, u1, y), Lq(a1, u0, y), col);
+    const W2 = 444, U0 = -142, U1 = 302, SWW = 32;
+    R.kls('aspal'); box(0, W2, U0, U1, 0.9, ASP);
+    R.kls('paving');
+    for (const [a0, u0] of [[0, U0], [0, U1 - SWW], [W2 - SWW, U0], [W2 - SWW, U1 - SWW]]) box(a0, a0 + SWW, u0, u0 + SWW, 4, SW);
+    // tepi tanpa lengan jalan = trotoar sepanjang tepi kotak
+    if (!j.lurus) box(W2 - SWW, W2, U0, U1, 4, SW);
+    if (!j.seberang) { if (j.dir > 0) box(0, W2, U1 - SWW, U1, 4, SW); else box(0, W2, U0, U0 + SWW, 4, SW); }
+    // panah belok di tiap lajur sebelum garis henti
+    R.kls('polos');
+    for (const lu of [-74, 0, 74]) {
+      const sgn = j.dir > 0 ? -1 : 1;
+      box(-170, -110, lu - 3, lu + 3, 1.3, '#f4f4f4');
+      if (sgn > 0) box(-116, -110, lu - 3, lu + 18, 1.3, '#f4f4f4'); else box(-116, -110, lu - 18, lu + 3, 1.3, '#f4f4f4');
+      const h0 = Lq(-123, lu + sgn * 18, 1.3), h1 = Lq(-103, lu + sgn * 18, 1.3), h2 = Lq(-113, lu + sgn * 32, 1.3);
+      if (sgn > 0) R.tri(h0, h2, h1, '#f4f4f4'); else R.tri(h0, h1, h2, '#f4f4f4');
+    }
+    // garis henti dan zebra di mulut jalan datang box(-14, -9, -110, 110, 1.2, '#ffffff'); for (let u = -104; u < 106; u += 18) box(-6, 10, u, u + 9, 1.2, '#f2f2f2');
+    // lengan jalan: aspal, trotoar, garis tengah putus-putus, zebra dekat kotak
+    for (const arm of j.arms) {
+      const D = arm.dir, Sd = [-D[1], D[0]], o = arm.o;
+      const Aq = (k, w, y) => [o[0] + D[0] * k + Sd[0] * w, y, o[1] + D[1] * k + Sd[1] * w];
+      const aq = (k0, k1, w0, w1, y, col) => R.quad(Aq(k0, w0, y), Aq(k0, w1, y), Aq(k1, w1, y), Aq(k1, w0, y), col);
+      R.kls('aspal'); aq(0, 960, -190, 190, 0.9, ASP);
+      R.kls('paving'); aq(0, 960, -222, -190, 4, SW); aq(0, 960, 190, 222, 4, SW);
+      R.kls('beton'); { const a = Aq(0, -190, 0), b = Aq(960, -190, 0), c2 = Aq(960, -190, 4), d2 = Aq(0, -190, 4); R.quad(a, b, c2, d2, CURB); }
+      { const a = Aq(0, 190, 0), b = Aq(960, 190, 0), c2 = Aq(960, 190, 4), d2 = Aq(0, 190, 4); R.quad(b, a, d2, c2, CURB); }
+      R.kls('polos'); for (let w = -184; w < 186; w += 18) aq(12, 30, w, w + 9, 1.2, '#f2f2f2');
+      for (let k = 70; k < 940; k += 44) aq(k, k + 22, -1.5, 1.5, 1.2, '#eeeeee');
+    }
   }
   // ujung jalan di tikungan (jalan yang lurus terus)
   for (const s of Wd.stubs) {
@@ -782,7 +819,7 @@ function createImpl(canvas, S, spec, o) {
       }
     }
     for (; mi < marks.length; mi++) { marks[mi].visible = false; zones[mi].visible = false; }
-    for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB) continue; person(pd, pr.u, 4 + Math.abs(Math.sin(t * 8 + pr.h)) * 2, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4], pr.h >>> 6); }
+    for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB || Wd.inJ(pd, 40)) continue; person(pd, pr.u, 4 + Math.abs(Math.sin(t * 8 + pr.h)) * 2, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4], pr.h >>> 6); }
     for (const pl of S.police) if (pl.d > dA && pl.d < dB) person(pl.d, -126, 4, rotOf(Wd.at(pl.d).a) - Math.PI / 2, '#5b4a2e', '#8d5a3b', 0);
     for (const p of pm) { p.m.count = n; p.m.instanceMatrix.needsUpdate = true; if (p.m.instanceColor) p.m.instanceColor.needsUpdate = true; }
     // lampu dan palang

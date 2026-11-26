@@ -31,7 +31,8 @@ function policy(S, p) {
   // lampu merah, palang kereta, tikungan
   const L = p.nekat ? null : S.nextLight(S.d + DR.PL / 2);
   if (L) { const gap = L.d - 70 - (S.d + DR.PL / 2), st = S.lightState(L); if (st !== 'hijau' && gap > -2 && gap < stopDist + 25 && !(st === 'kuning' && gap < 30 && p.careful === false)) inp.brake = true; }
-  if (p.careful) { for (let a = 40; a < 420; a += 40) if (S.world.at(S.d + a).k && S.v > DR.CORNER_V - 15) inp.brake = true; }
+  // persimpangan: rem supaya masuk belokan di bawah laju aman lajurnya (S.turnV)
+  if (p.careful) { for (let a = 0; a < 480; a += 20) { const vt = S.turnV(S.d + a, inp.tx) - 12; if (S.v > vt && (S.v * S.v - vt * vt) / (2 * BRAKE * S.brakeK) + 25 > a) { inp.brake = true; break; } } }
   inp.gas = 1;
   if (p.careful && S.police.some(q => !q.done && q.d - S.d < 650) && S.v > 0.78 * S.vMax) inp.brake = true;
   if (inp.brake) inp.gas = 0;

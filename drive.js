@@ -13,11 +13,15 @@ const ACC = 170, BRAKE = 540, COAST = 75, LAT = 380, STOP_V = 30, CORNER_V = 235
 // lewat SLIDE_MAX = kebablasan. Tidak ada dorongan ke samping, jadi pemain tidak pernah perlu membelokkan manual.
 const SLIDE_MAX = 40;
 // setir bebas: K_MAX = lengkung tajam penuh (1/radius), A_LAT = batas cengkeraman (tikungan jalan pas di CORNER_V)
-const K_MAX = 1 / 120, STEER_RATE = 3.5, LANE_VMAX = 170;
-const A_LAT = 235 * 235 / 420;
+const K_MAX = 1 / 55, STEER_RATE = 3.5, LANE_VMAX = 170;
+// batas cengkeraman: belok kiri lajur tengah (R 142) aman sampai ±168 (30 km/j), belok kanan (R 302) ±246
+const A_LAT = 200;
 const V_REV = 90, ACC_REV = 110, STEER_R = 420, YAW_MAX = 0.2;
 const KIND = { motor: { w: 16, l: 34 }, mobil: { w: 34, l: 66 }, pikap: { w: 36, l: 76 }, truk: { w: 44, l: 118 } };
-const STEP = 8, DMIN = -1000, DMAX = 17000, TURN_R = 420;
+const STEP = 8, DMIN = -1000, DMAX = 17000;
+// belok di persimpangan: jalan dua arah selebar 444 (u -142..302). Belok kiri memutari pojok dalam kotak simpang
+// (R 142 di lajur tengah), belok kanan menyeberangi kotak (R 302). Busurnya pas di dalam kotak simpang.
+const R_KIRI = 142, R_KANAN = 302, JW = 444, JU0 = -142;
 const LIGHT_T = 16, RAIL_T = 22, CAM_U = -50, Z_STOP = 0.66, Z_FAST = 0.56;
 
 function mulberry(seed) {
@@ -45,7 +49,7 @@ function buildWorld(route) {
   const segs = []; let total = DMIN, dir = r() < 0.5 ? 1 : -1;
   segs.push({ t: 'S', len: 1700 }); total += 1700;
   while (total < DMAX + 400) {
-    const len = TURN_R * Math.PI / 2; segs.push({ t: 'A', len, R: TURN_R, dir }); total += len; dir = -dir;
+    const R = dir > 0 ? R_KIRI : R_KANAN, len = R * Math.PI / 2; segs.push({ t: 'A', len, R, dir, tipe: r() < 0.5 ? 'perempatan' : 'pertigaan', lurus: r() < 0.5 }); total += len; dir = -dir;
     const L = 1500 + Math.floor(r() * 1000); segs.push({ t: 'S', len: L }); total += L;
   }
   let d0 = DMIN; for (const sg of segs) { sg.d0 = d0; sg.d1 = d0 + sg.len; d0 = sg.d1; }
@@ -84,9 +88,26 @@ function buildWorld(route) {
       cross.push({ d, light: r() < 0.6 });
     }
   }
+  // persimpangan tempat rute berbelok: kotak simpang JW × JW mulai di awal busur, ditambah lengan jalan
+  // 'lurus' (terusan jalan datang) dan/atau 'seberang' (terusan jalan keluar ke arah sebaliknya).
+  // Perempatan punya keduanya, pertigaan salah satu.
+  const junctions = arcs.map(sg => {
+    const p = Wd.at(sg.d0), t = [p.tx, p.ty], n = [p.nx, p.ny], S0 = [p.x, p.y];
+    const L = (al, u) => [S0[0] + t[0] * al + n[0] * u, S0[1] + t[1] * al + n[1] * u];
+    const arms = [];
+    const lurus = sg.tipe === 'perempatan' || sg.lurus, seberang = sg.tipe === 'perempatan' || !sg.lurus;
+    if (lurus) arms.push({ o: L(JW, JU0 + JW / 2), dir: t });
+    if (seberang) { const sd = sg.dir; arms.push({ o: L(JW / 2, sd > 0 ? JU0 + JW : JU0), dir: [n[0] * sd, n[1] * sd] }); }
+    return { d0: sg.d0, d1: sg.d1, dir: sg.dir, R: sg.R, tipe: sg.tipe, lurus, seberang, a: p.a, S: S0, t, n, L, arms, nama: sg.tipe === 'perempatan' ? 'Perempatan' : 'Pertigaan' };
+  });
   const stubs = [];
-  for (const sg of arcs) { stubs.push({ d: sg.d0, dir: 1 }); stubs.push({ d: sg.d1, dir: -1 }); }
-  Object.assign(Wd, { straights, arcs, landmarks, river, rail, cross, stubs, dest: landmarks[landmarks.length - 1] });
+  Object.assign(Wd, { straights, arcs, junctions, landmarks, river, rail, cross, stubs, dest: landmarks[landmarks.length - 1] });
+  // di dalam kotak simpang (dengan jarak m)?
+  Wd.inJ = (d, m) => junctions.some(j => d > j.d0 - (m || 0) && d < j.d1 + (m || 0));
+  // jari-jari lintasan di lateral x (lajur dalam lebih sempit) dan laju belok aman di sana
+  Wd.radius = (d, x) => { const k = Wd.at(d).k; return k ? 1 / Math.abs(k) + Math.sign(k) * (x - 180) : Infinity; };
+  // faktor jarak: di tikungan lajur dalam lebih pendek, jadi d (diukur di garis tengah) maju lebih cepat
+  Wd.sf = (d, x) => { const k = Wd.at(d).k; return k ? 1 / Math.max(0.2, 1 + k * (x - 180)) : 1; };
   // peta hambatan: titik-titik jalan untuk mencegah bangunan menimpa jalan
   const H = new Map(), B = 300;
   const add = (x, y, half, d) => { const k = Math.floor(x / B) + ',' + Math.floor(y / B); let L = H.get(k); if (!L) H.set(k, L = []); L.push({ x, y, half, d }); };
@@ -95,7 +116,10 @@ function buildWorld(route) {
   const across = (d, u0, u1, half) => { for (let u = u0; u <= u1; u += 40) { const [qx, qy] = Wd.pt(d, u); add(qx, qy, half, null); } };
   for (const c of cross) across(c.d, -720, 920, 70);
   across(river.d, -2600, 2600, 100); across(rail.d, -2600, 2600, 36);
-  for (const s of stubs) { const p = Wd.at(s.d); for (let k = 0; k <= 900; k += 40) add(p.x + p.nx * 80 + s.dir * p.tx * k, p.y + p.ny * 80 + s.dir * p.ty * k, 150, null); }
+  for (const j of junctions) {
+    for (let al = 0; al <= JW; al += 60) for (let u = JU0; u <= JU0 + JW; u += 60) { const [qx, qy] = j.L(al, u); add(qx, qy, 70, null); }
+    for (const a of j.arms) for (let k = 0; k <= 960; k += 40) add(a.o[0] + a.dir[0] * k, a.o[1] + a.dir[1] * k, 250, null);
+  }
   Wd.blocked = function (x, y, m, ownD) {
     const bx = Math.floor(x / B), by = Math.floor(y / B);
     for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
@@ -119,7 +143,7 @@ class Sim {
     this.cool = 0; this.shake = 0; this.stopT = 0; this.braking = false; this.over = false; this.mogok = false; this.deadT = 0; this.skidCool = 0; this.slide = 0;
     this.msgs = []; this.pops = []; this.crossers = [];
     const gaps = [...Wd.cross.map(c => c.d), Wd.river.d, Wd.rail.d];
-    const nudge = d => { for (const g of gaps) if (Math.abs(d - g) < 115) return g + 125; return d; };
+    const nudge = d => { for (const g of gaps) if (Math.abs(d - g) < 115) return g + 125; for (const j of Wd.junctions) if (d > j.d0 - 140 && d < j.d1 + 80) return j.d1 + 150; return d; };
     this.groups = spec.groups.map(g => ({ d: nudge(g.d), n: g.n, n0: g.n, prog: 0, taken: null, lure: this.r() < 0.4 }));
     this.cars = spec.traffic.map(m => { const kind = m.kind || 'motor', K = KIND[kind];
       return { kind, w: K.w, l: K.l, d: m.d, x: LANES[m.lane], tx: LANES[m.lane], v: m.v, v0: m.v, hue: Math.floor(this.r() * 8), next: 2 + this.r() * 6 }; });
@@ -135,6 +159,7 @@ class Sim {
   nextLight(d) { return this.lights.find(L => L.d - 70 > d); }
   say(text, kind) { if (this.msgs.some(m => m.text === text && m.t < 1.5)) return; this.msgs.push({ text, kind: kind || '', t: 0 }); if (this.msgs.length > 3) this.msgs.shift(); }
   pop(text, good) { this.pops.push({ x: this.x, d: this.d, text, good, t: 0 }); }
+  turnV(d, x) { const r = this.world.radius(d, x); return r === Infinity ? Infinity : Math.sqrt(A_LAT * Math.max(20, r)) * (this.spec.wet ? 0.9 : 1); }
   atCurb() { return this.x < CURB_X && Math.abs(this.v) < STOP_V; }
   step(dt, inp) {
     if (this.over) return;
@@ -158,7 +183,7 @@ class Sim {
     else this.v = toward0(this.v, COAST * dt);
     const spd = Math.abs(this.v), x0 = this.x;
     // setir, plus terlempar keluar kalau menikung terlalu kencang
-    const k = this.world.at(this.d).k, over = this.v - CORNER_V * (S.wet ? 0.9 : 1);
+    const k = this.world.at(this.d).k, over = this.v - this.turnV(this.d, this.x), sf = this.world.sf(this.d, this.x);
     // skid hanya untuk tampilan (buntut angkot mengayun) dan peringatan; posisi lateral tidak didorong
     this.skid = k && over > 0 ? Math.sign(k) * over * 3.2 : 0;
     const bebas = inp.steer != null && inp.lane == null;
@@ -183,12 +208,18 @@ class Sim {
       // lurus dan angkot pelan-pelan sejajar jalan lagi (hanya di jalan lurus; di tikungan bantuannya tidak cukup).
       const raw = clamp(inp.steer, -1, 1) + wob;
       this.delta += clamp(raw - this.delta, -STEER_RATE * dt, STEER_RATE * dt);
-      let kap = this.delta * K_MAX;
-      if (Math.abs(raw) < 0.08) kap += clamp(-this.psi * 1.2 / Math.max(spd, 60), -K_MAX * 0.3, K_MAX * 0.3);
+      // makin kencang makin sedikit putaran setir yang dibutuhkan (setir tidak terlalu peka di jalan lurus)
+      let kap = this.delta * K_MAX * clamp(90 / Math.max(spd, 1), 0.25, 1);
+      if (Math.abs(raw) < 0.08) kap += clamp(-this.psi * 1.2 / Math.max(spd, 60), -K_MAX * 0.15, K_MAX * 0.15);
+      // BANTUAN BELOK di persimpangan: putar setir ke arah belokan (berapa pun), angkot mengikuti lintasan belok sendiri
+      // setelah sekali kebablasan di simpang, sisa belokan dibantu (hukumannya cukup sekali per simpang)
+      if (this.rescue != null && (this.d > this.rescue || !k)) this.rescue = null;
+      this.assist = !!k && (this.rescue != null || (Math.sign(raw) === -Math.sign(k) && Math.abs(raw) > 0.2));
+      if (this.assist) kap = -k * sf - this.psi * 2 / Math.max(spd, 60);
       const kLim = spd > 1 ? A_LAT * (S.wet ? 0.81 : 1) / (spd * spd) : K_MAX;
-      this.under = Math.abs(kap) > kLim && spd > 150 && k !== 0;      // di jalan lurus batas belok tidak dihitung selip
+      this.under = Math.abs(kap) > kLim && spd > 100 && k !== 0;      // di jalan lurus batas belok tidak dihitung selip
       kap = clamp(kap, -kLim, kLim);
-      if (spd > 1) this.psi = clamp(this.psi + this.v * (kap + k) * dt, -1.1, 1.1);
+      if (spd > 1) this.psi = clamp(this.psi + this.v * (kap + k * sf * Math.cos(this.psi)) * dt, -1.1, 1.1);
       this.x += this.v * Math.sin(this.psi) * dt; this.fwd = Math.cos(this.psi);
       this.steer = this.delta; this.tx = this.x;
       this.skid = this.under ? -Math.sign(kap) * 60 : 0;
@@ -202,16 +233,18 @@ class Sim {
     const xmin = ROAD_L + PW / 2, xmax = ROAD_R - PW / 2;
     if (this.skid && this.slide > SLIDE_MAX * 0.35) this.say('Ban berdecit! Rem!', 'bad');
     if (this.slide >= SLIDE_MAX && this.skidCool <= 0) {
-      this.skids++; this.v *= 0.55; this.slide = 0; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di tikungan!', 'bad');
+      this.skids++; this.v *= 0.55; this.slide = 0; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di persimpangan!', 'bad');
     }
     if (bebas) {
       if (this.under) this.say('Ban berdecit! Kurangi gas!', 'bad');
       // setir bebas: menabrak tepi jalan. Pelan = cuma mentok (menepi ke trotoar boleh); kencang = kebablasan.
-      const into = (this.x <= xmin && this.v * Math.sin(this.psi) < 0) || (this.x >= xmax && this.v * Math.sin(this.psi) > 0);
+      const lv = this.v * Math.sin(this.psi), into = Math.abs(lv) > 12 && ((this.x <= xmin && lv < 0) || (this.x >= xmax && lv > 0));
       if (into) {
-        if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di tikungan!' : 'Nyenggol pinggir jalan!', 'bad'); }
+        if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di persimpangan!' : 'Nyenggol pinggir jalan!', 'bad'); }
         this.psi *= 0.3;
+        if (k) { const j = this.world.junctions.find(j => this.d >= j.d0 && this.d <= j.d1); if (j) { this.rescue = j.d1; this.psi = 0; } }
       }
+      if ((this.x <= xmin && this.v * Math.sin(this.psi) < 0) || (this.x >= xmax && this.v * Math.sin(this.psi) > 0)) this.psi *= 0.5;
       this.x = clamp(this.x, xmin, xmax);
       this.yaw = this.psi;
     } else {
@@ -220,7 +253,7 @@ class Sim {
       const lv = dt > 0 ? (this.x - x0) / dt : 0, yt = spd < 2 ? this.yaw : clamp(Math.atan(lv / Math.max(spd, 110)), -YAW_MAX, YAW_MAX) * Math.sign(this.v || 1);
       this.yaw += (yt - this.yaw) * Math.min(1, dt * 7);
     }
-    const prev = this.d; this.d = Math.max(-200, this.d + this.v * this.fwd * dt);
+    const prev = this.d; this.d = Math.max(-200, this.d + this.v * this.fwd * sf * dt);
     // lampu merah dan palang kereta
     for (const L of this.lights) {
       const sl = L.d - 70;
@@ -252,7 +285,7 @@ class Sim {
       if (behind) { v = Math.min(v, Math.max(0, this.v)); if (m.kind === 'motor') m.tx = this.x < 180 ? LANES[2] : LANES[0]; }
       for (const o of all) { if (o === m || o.d <= m.d || Math.abs(o.x - m.x) > (o.w + m.w) / 2 + 2) continue; const gap = o.d - o.l / 2 - (m.d + m.l / 2); if (gap < 26 + m.v * 0.25) { v = Math.min(v, o.state === 'ngetem' ? 0 : o.v); if (gap < 3) m.d = o.d - o.l / 2 - m.l / 2 - 3; } }
       const stop = this.stopFor(m); if (stop != null) { v = 0; m.d = Math.min(m.d, stop); }
-      m.v = v; m.x += clamp(m.tx - m.x, -(m.kind === 'motor' ? 90 : 50) * dt, (m.kind === 'motor' ? 90 : 50) * dt); m.d += m.v * dt;
+      m.v = v; m.x += clamp(m.tx - m.x, -(m.kind === 'motor' ? 90 : 50) * dt, (m.kind === 'motor' ? 90 : 50) * dt); m.d += m.v * dt * this.world.sf(m.d, m.x);
     }
     for (const b of this.biru) {
       if (b.state === 'jalan') {
@@ -269,7 +302,7 @@ class Sim {
         }
         for (const o of this.cars) { if (o.d <= b.d || Math.abs(o.x - b.x) > (o.w + b.w) / 2 + 2) continue; const gap = o.d - o.l / 2 - (b.d + b.l / 2); if (gap < 30) { b.v = Math.min(b.v, o.v); if (gap < 3) b.d = o.d - o.l / 2 - b.l / 2 - 3; } }
         const stop = this.stopFor(b); if (stop != null) { b.v = 0; b.d = Math.min(b.d, stop); }
-        b.x += clamp(b.tx - b.x, -70 * dt, 70 * dt); b.d += b.v * dt;
+        b.x += clamp(b.tx - b.x, -70 * dt, 70 * dt); b.d += b.v * dt * this.world.sf(b.d, b.x);
       } else if (b.state === 'ngetem') {
         b.timer += dt;
         const g = b.g;
@@ -442,7 +475,7 @@ function atap(c, x, y, w, h, col, ridge) {
 function buildScenery(Wd) {
   if (Wd.scen) return Wd.scen;
   const r = mulberry(hash(Wd.route.charCodeAt(1) * 977 + 5)), items = [], props = [];
-  const nearGap = (d, m) => Wd.cross.some(c => Math.abs(c.d - d) < m) || Math.abs(Wd.river.d - d) < m + 40 || Math.abs(Wd.rail.d - d) < m;
+  const nearGap = (d, m) => Wd.cross.some(c => Math.abs(c.d - d) < m) || Math.abs(Wd.river.d - d) < m + 40 || Math.abs(Wd.rail.d - d) < m || Wd.inJ(d, m);
   const lmAt = (d, side, m) => Wd.landmarks.find(l => l.side === side && Math.abs(l.d - d) < l.len / 2 + m);
   const fits = (d, u0, u1, len) => {
     for (const [dd, uu] of [[d - len / 2, u0], [d + len / 2, u0], [d - len / 2, u1], [d + len / 2, u1], [d, (u0 + u1) / 2]]) {
@@ -628,6 +661,29 @@ function draw(c, S, H, o) {
   band(117, 14, '#c9c3b4'); band(111, 2, '#e8c547'); band(123, 2, '#e8c547');
   band(-108, 2, '#e9e9e9'); band(268, 2, '#e9e9e9');
   band(-37, 3, 'rgba(255,255,255,.75)', [22, 22]); band(37, 3, 'rgba(255,255,255,.75)', [22, 22]); band(197, 3, 'rgba(255,255,255,.7)', [22, 22]);
+  // persimpangan tempat rute berbelok: kotak simpang menutupi pita jalan yang menikung, plus lengan jalan
+  for (const j of Wd.junctions) {
+    if (j.d1 < dA - 1200 || j.d0 > dB + 1200) continue;
+    const asp = o.wet ? '#2f383f' : '#3b454d', sw = '#d9cfb6';
+    for (const arm of j.arms) {
+      c.save(); c.translate(arm.o[0], arm.o[1]); c.rotate(Math.atan2(arm.dir[1], arm.dir[0]) + Math.PI / 2);
+      c.fillStyle = sw; c.fillRect(-222, -960, 444, 960); c.fillStyle = asp; c.fillRect(-190, -960, 380, 960);
+      c.fillStyle = 'rgba(255,255,255,.85)'; for (let w = -184; w < 186; w += 18) c.fillRect(w, -30, 9, 18);
+      c.fillStyle = 'rgba(255,255,255,.7)'; for (let k = 70; k < 940; k += 44) c.fillRect(-1.5, -k - 22, 3, 22);
+      c.restore();
+    }
+    place(j.d0, 0, () => {
+      c.fillStyle = asp; c.fillRect(-142, -444, 444, 444);
+      c.fillStyle = sw; for (const [u0, a0] of [[-142, 0], [270, 0], [-142, 412], [270, 412]]) c.fillRect(u0, -a0 - 32, 32, 32);
+      if (!j.lurus) c.fillRect(-142, -444, 444, 32);
+      if (!j.seberang) { if (j.dir > 0) c.fillRect(270, -444, 32, 444); else c.fillRect(-142, -444, 32, 444); }
+      c.fillStyle = '#fff'; c.fillRect(-110, 9, 220, 5);
+      c.fillStyle = 'rgba(255,255,255,.85)'; for (let u = -104; u < 106; u += 18) c.fillRect(u, -10, 9, 16);
+      // panah belok di aspal
+      c.save(); c.translate(0, -150); c.scale(j.dir > 0 ? -1 : 1, 1); c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 8; c.lineCap = 'round'; c.beginPath(); c.moveTo(0, 60); c.lineTo(0, 0); c.quadraticCurveTo(0, -30, 30, -30); c.lineTo(50, -30); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.8)'; c.beginPath(); c.moveTo(70, -30); c.lineTo(48, -46); c.lineTo(48, -14); c.closePath(); c.fill(); c.restore();
+    });
+  }
   // perempatan menutup marka, garis henti, zebra
   for (const cr2 of Wd.cross) {
     if (cr2.d < dA || cr2.d > dB) continue;
@@ -652,7 +708,7 @@ function draw(c, S, H, o) {
   for (const it of sc.items) { if (it.d < dA - 200 || it.d > dB + 200) continue; place(it.d, 0, () => drawItem(c, it, it.u0 < 0 ? -1 : 1)); }
   for (const L of Wd.landmarks) { if (Math.abs(L.d - d) > 1800) continue; place(L.d, 0, () => drawLandmark(c, L, t)); }
   for (const p of sc.props) {
-    let pd = p.d; if (p.kind === 'pejalan') { pd = p.d + p.v * t; } if (pd < dA || pd > dB) continue;
+    let pd = p.d; if (p.kind === 'pejalan') { pd = p.d + p.v * t; if (Wd.inJ(pd, 40)) continue; } if (pd < dA || pd > dB) continue;
     place(pd, p.u, () => {
       if (p.kind === 'tiang') { c.fillStyle = '#5d5d5d'; c.fillRect(-4, -4, 8, 8); c.fillStyle = '#333'; c.fillRect(-14, -1, 28, 2); }
       else if (p.kind === 'lampu') { c.fillStyle = '#777'; c.fillRect(-2, -2, 4, 4); c.fillRect(-p.side * 2, -1.5, p.side * 34, 3); c.fillStyle = '#ffe9a8'; c.beginPath(); c.arc(p.side * 34, 0, 5, 0, 7); c.fill(); }
@@ -760,14 +816,15 @@ function drawHUD(c, S, H, o, proj) {
   // pesan
   S.msgs.forEach((m, i) => { c.globalAlpha = Math.min(1, (2.6 - m.t) * 2); c.fillStyle = m.kind === 'bad' ? '#d33' : m.kind === 'good' ? '#1f9d55' : m.kind === 'kiri' ? '#b8860b' : '#1b2630'; rr(c, 60, 62 + i * 30, 200, 24, 12); c.fill(); txt(c, m.text, 160, 74 + i * 30, 12, '#fff'); c.globalAlpha = 1; });
   if (Math.abs(S.v) < 5 && !S.gas && !S.rev && S.t < 6 && !S.over) { c.fillStyle = 'rgba(31,157,85,.95)'; rr(c, 80, H - 112, 200, 30, 15); c.fill(); txt(c, 'Tahan GAS untuk jalan →', 180, H - 97, 13, '#fff'); }
-  // setir bebas: panah sebelum dan selama tikungan, supaya pemain tahu harus membelokkan ke mana
-  if (o.ctl === 'bebas' && !S.over) {
-    const a = Wd.arcs.find(a => a.d1 > d && a.d0 - d < 420);
-    if (a) { const kiri = a.dir > 0, now = a.d0 <= d; c.fillStyle = now ? 'rgba(53,120,229,.95)' : 'rgba(53,120,229,.8)'; rr(c, 95, H - 150, 170, 30, 15); c.fill(); txt(c, (kiri ? '↰ Belok kiri' : 'Belok kanan ↱') + (now ? '' : ' nanti'), 180, H - 135, 13, '#fff'); }
+  // persimpangan di depan: arah belok, dan laju belok aman (km/j) kalau masih terlalu kencang
+  const J = !S.over && Wd.junctions.find(j => j.d1 > d && j.d0 - d < 560);
+  if (J) {
+    const kiri = J.dir > 0, now = J.d0 <= d, vt = S.turnV((J.d0 + J.d1) / 2, S.x);
+    const putar = o.ctl === 'bebas' && J.d0 - d < 160 ? (kiri ? ' · putar setir ke kiri' : ' · putar setir ke kanan') : '';
+    c.fillStyle = now ? 'rgba(53,120,229,.95)' : 'rgba(53,120,229,.85)'; rr(c, 40, H - 150, 280, 30, 15); c.fill();
+    txt(c, `${J.nama}: ${kiri ? '↰ belok kiri' : 'belok kanan ↱'}${putar}`, 180, H - 135, 12.5, '#fff');
+    if (S.v > vt + 8) { c.fillStyle = 'rgba(242,194,48,.95)'; rr(c, 70, H - 112, 220, 26, 13); c.fill(); txt(c, `Pelan! Belok maks ±${Math.round(vt / 340 * 60)} km/j`, 180, H - 99, 12, '#111'); }
   }
-  // peringatan tikungan
-  const ahead = Wd.arcs.find(a => a.d0 > d - 50 && a.d0 - d < 450) || (Wd.at(d).k ? {} : null);
-  if (ahead && S.v > CORNER_V - 10) { c.fillStyle = 'rgba(242,194,48,.95)'; rr(c, 90, H - 76, 180, 26, 13); c.fill(); txt(c, 'Tikungan! Pelan-pelan', 180, H - 63, 12, '#111'); }
 }
 
 /* ---------- pasang di halaman ---------- */
@@ -784,8 +841,8 @@ function mount(host, spec, opts, done) {
   const modes = R3 ? ['atas', 'belakang', '2d'] : ['2d'];
   let mode = modes.includes(camLoad()) ? camLoad() : modes[0], ctl = ctlLoad();
   const KET = {
-    lajur: 'Ketuk <b>◀ ▶</b> (atau geser jari ke kiri/kanan di layar) untuk pindah <b>satu lajur</b>. Angkot selalu berbelok sendiri mengikuti jalan. Lajur paling kiri = menepi.',
-    bebas: '<b>Setir sungguhan</b>: sentuh dan geser jempol di setir. Di tikungan kamu harus ikut membelokkan; ada panah peringatan sebelum tikungan. Lepas setir, angkot pelan-pelan lurus lagi.'
+    lajur: 'Ketuk <b>◀ ▶</b> (atau geser jari ke kiri/kanan di layar) untuk pindah <b>satu lajur</b>. Di perempatan atau pertigaan angkot berbelok sendiri. Lajur paling kiri = menepi.',
+    bebas: '<b>Setir sungguhan</b>: sentuh dan geser jempol di setir. Di perempatan atau pertigaan ikuti panah: <b>putar setir ke arah belokan dan tahan</b>, angkot berbelok mengikuti lintasan. Lepas setir di jalan lurus, angkot pelan-pelan lurus lagi.'
   };
   host.innerHTML = `<div class="nyetir" role="application" aria-label="Nyetir angkot" data-kontrol="${ctl}">
     <div class="ny-kanvas"><canvas class="ny-hud"></canvas>${modes.length > 1 ? `<button class="ny-kam" data-ny="kam" aria-label="Ganti kamera">🎥 <span>${CAMS[mode]}</span></button>` : ''}
@@ -796,7 +853,7 @@ function mount(host, spec, opts, done) {
         <li>Kelewatan penumpang? Ketuk <b>MUNDUR</b>, lalu tahan GAS untuk jalan mundur. Ketuk lagi (MAJU) untuk maju. Hati-hati, kendaraan di belakang bisa terserempet.</li>
         <li>Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D lajur atau setir, R mundur/maju, H klakson, C kamera.</li>
         <li>Orang melambai di trotoar: <b>menepi ke kotak kuning dan berhenti</b>.</li><li>Ada yang teriak <b>“Kiri!”</b>: menepi dan berhenti. Ongkos dibayar waktu turun. Kelewatan, dia tidak mau bayar.</li>
-        <li>Tikungan terlalu kencang: ban berdecit, lalu <b>kebablasan</b>. Rem begitu dengar decit.</li>
+        <li>Rute berbelok di <b>perempatan</b> dan <b>pertigaan</b>; arah beloknya ditunjuk panah. Pelan-pelan waktu belok (kiri ±30 km/j, kanan ±44 km/j), kalau tidak <b>kebablasan</b>.</li>
         <li>Patuhi <b>lampu merah</b> dan <b>palang kereta</b>.</li>
         <li>Awas motor, mobil, lubang, dan polisi. Angkot biru suka menyerobot penumpang.</li></ul>
         ${spec.wet ? '<p><b>Hujan:</b> rem licin, penumpang lebih banyak.</p>' : ''}${spec.wobble ? '<p><b>Kamu ngantuk:</b> setir agak goyang.</p>' : ''}${spec.sh === 2 ? '<p><b>Sore:</b> makin lama makin gelap.</p>' : ''}

@@ -72,26 +72,25 @@ Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik 
 ## Mini-game nyetir
 
 Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
-60 detik di kota Cibening. Dua cara setir, dipilih di kartu pembuka (`localStorage` kunci `narik-setir`):
-- **Tombol lajur** (`lajur`, bawaan): tombol ◀ ▶ (atau geser jari di layar, atau ←/→) = tepat satu lajur (`inp.lane`).
-  Jalan selalu membelokkan angkot sendiri. Geser lajur 0,8–1,2 dtk, berhenti mulus di tengah. Ngebut di tikungan
-  menumpuk selip: "Ban berdecit!" lalu kebablasan di `SLIDE_MAX` 40 (bot juga memakai aturan ini).
-- **Setir bebas** (`bebas`): setir bulat mengubah arah hadap angkot `S.psi` relatif terhadap jalan (`inp.steer`, lengkung
-  maks `K_MAX` 1/120). Lengkung jalan memutar arah itu, jadi di tikungan pemain harus ikut membelokkan (panah biru "Belok
-  kiri/kanan" muncul sebelumnya). Daya belok dibatasi cengkeraman `A_LAT` (tikungan jalan pas di 235, 90% saat hujan),
-  jadi ngebut = melebar ke tepi = kebablasan secara fisik. Dilepas, setir lurus dan angkot pelan-pelan sejajar jalan
-  (bantuan tidak cukup untuk tikungan). Menabrak tepi di atas laju 110 = kebablasan/nyenggol.
-Bot jempol (reaksi 0,25 dtk, pelan di persimpangan): tombol lajur 12,9 penumpang, Rp 97 rb per rit; setir bebas 11,2 penumpang,
-Rp 78 rb (menepi dengan setir sungguhan lebih lambat: geser ke samping = laju × sin sudut).
-Tombol MUNDUR dan klakson di tengah, pedal REM dan GAS di kanan. Tanpa gas angkot melambat sendiri (`COAST` 75/dtk²).
-Gigi mundur (`inp.mundur`, tombol MUNDUR/MAJU atau R): gas mendorong ke belakang sampai `V_REV` 90; kalau angkot masih
-bergerak ke arah lain, gas mengerem dulu. Mundur menabrak kendaraan di belakang = serempet. Lampu mundur putih di 2D dan 3D.
-Angkot diam tidak bisa bergeser. Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D lajur atau setir, R mundur/maju, H klakson, C kamera. Bot (`drivebot.js`) tetap
-memakai target lajur `inp.tx` dan gas penuh kecuali saat mengerem, jadi angka keseimbangan tidak berubah. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
+60 detik di kota Cibening. Empat tombol: ◀ ▶ di kiri (belok), klakson di tengah, ▼ MUNDUR dan ▲ MAJU di kanan.
+- ▲ MAJU = gas (kalau sedang mundur, mengerem dulu). Dilepas, angkot melambat sendiri (`COAST` 75/dtk²).
+- ▼ MUNDUR = rem; tetap ditahan 0,45 dtk setelah berhenti, angkot jalan mundur sampai `V_REV` 90 (`inp.mundur`).
+  Mundur menabrak kendaraan di belakang = serempet. Lampu mundur putih di 2D dan 3D.
+- ◀ ▶ = setir (`inp.steer`). Di `mount` nilai setir naik pelan (2,4/dtk) dan turun cepat (5/dtk). Setir mengubah arah hadap
+  angkot `S.psi` relatif terhadap jalan (lengkung maks `K_MAX` 1/55, makin kencang makin halus: × 60/laju, min 0,2).
+  Di jalan lurus sudut dibatasi ±0,45 rad, dan saat dilepas angkot lurus lagi lalu merapat ke tengah lajur yang sedang
+  dituju (target sudut = jarak ke lajur × 2,5/laju, peredaman cukup supaya tidak memantul). Tahan 0,15 dtk = geser kecil
+  lalu kembali; ±0,35 dtk atau lebih = pindah satu lajur.
+- Persimpangan: tahan ◀ atau ▶ ke arah panah (>0,2) = bantuan belok (angkot mengikuti lintasan belok). Dilepas atau tidak
+  ditekan di dalam simpang = angkot lurus terus, menabrak tepi = kebablasan sekali, sisa belokan dibantu.
+  Daya belok dibatasi cengkeraman `A_LAT`, jadi ngebut = melebar ke tepi = kebablasan.
+- Keyboard: ↑/W maju, ↓/S mundur, ←→/A/D belok, spasi rem, H klakson, C kamera.
+Bot jempol tombol (reaksi 0,25 dtk, pelan di persimpangan): 11,1 penumpang, Rp 77 rb per rit. Bot drivebot tetap memakai
+target lajur `inp.tx` (jalan membelokkan sendiri), jadi angka keseimbangan tidak berubah.
+Angkot diam tidak bisa bergeser. Kamera atas menoleh ke landmark yang sedang dilewati. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
 `localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Semua kamera ikut angkot, bukan jalan: berpusat di angkot dan
 menghadap arah hadap angkot (`o.camH` = arah jalan + `S.yaw`, dihaluskan di `mount`), jadi di tikungan jalan terlihat
-membelok di depan dan pemain tahu harus membelokkan. Setir jari memakai posisi angkot di layar
-(`o.psx`, `o.ppu`), jadi sama untuk ketiganya. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat
+membelok di depan dan pemain tahu harus membelokkan. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat
 waktu rit tetap sama dengan waktu nyata. Tombol Lanjut di ringkasan dikunci 0,7 dtk supaya rem/spasi yang masih
 ditahan tidak menutupnya.
 
@@ -110,9 +109,8 @@ ditahan tidak menutupnya.
   dalam), kanan R 302 (menyeberangi kotak); busurnya pas di dalam kotak. Lajur dalam lebih sempit: `Wd.radius(d, x)`, dan
   `Wd.sf(d, x)` mempercepat d di lajur dalam supaya laju nyata sama. Laju belok aman `S.turnV(d, x)` = √(`A_LAT` 200 × jari-jari):
   kiri lajur tengah ±168 (30 km/j), lajur trotoar ±117, kanan ±246. Banner biru "Perempatan: ↰ belok kiri" dan peringatan
-  kuning laju maks muncul 560 unit sebelumnya. Setir bebas: memutar setir ke arah belokan (>0,2) menyalakan bantuan belok
-  (angkot mengikuti lintasan); tidak membelok = menabrak tepi = kebablasan sekali, sisa belokan dibantu. Tombol lajur dan bot:
-  jalan membelokkan sendiri, ngebut menumpuk selip sampai `SLIDE_MAX`. Bot rapi mengerem untuk `turnV`.
+  kuning laju maks muncul 560 unit sebelumnya ("· tahan ◀" saat sudah dekat). Bot: jalan membelokkan sendiri, ngebut
+  menumpuk selip sampai `SLIDE_MAX`. Bot rapi mengerem untuk `turnV`.
 - Kendaraan searah (motor, mobil, pikap, truk, angkot biru) ikut berhenti di lampu merah dan di belakang kendaraan lain.
   Kendaraan arah berlawanan hanya hiasan.
 - Tarif per penumpang = pendapatan rit dasar × kondisi × upgrade × kejadian ÷ `G.DRIVE.par` (12,5).
@@ -186,7 +184,7 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
 - Tampilan 3D belum pernah diukur di HP sungguhan. Di Chromium headless (WebGL perangkat lunak): mode Tinggi ±3 fps,
   Ringan ±8 fps. Fisika memakai langkah ≤0,05 dtk dengan batas 0,5 dtk per frame; di bawah 2 fps waktu rit melambat.
 - Masih bentuk JS sederhana: aspal, marka, sungai, jembatan, rambu, kampung jauh kalau aset gagal dimuat.
-- Kontroler belum diuji dengan jari di HP sungguhan; ukuran setir dan pedal mungkin perlu disesuaikan.
+- Kontroler belum diuji dengan jari di HP sungguhan; ukuran tombol mungkin perlu disesuaikan.
 
 ## Gaya tulisan
 

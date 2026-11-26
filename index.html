@@ -211,24 +211,16 @@ main { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 24px; displa
 .ny-kartu .ny-rute { font-size: 12px; font-weight: 700; color: var(--tinta-2); }
 .ny-kartu .btn-teks { background: none; border: 0; color: var(--tinta-2); text-decoration: underline; font-size: 13.5px; padding: 6px; }
 .ny-kontrol { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); background: #11181e; }
-.setir { width: min(124px, 31vw); height: min(124px, 31vw); flex: none; border-radius: 50%; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; background: radial-gradient(circle, #1b2329 0 62%, #0c1115 63%); }
-.setir svg { width: 100%; height: 100%; display: block; }
-.setir-roda { transform-origin: 0 0; transition: transform .12s ease-out; }
-.setir.on .setir-roda { transition: none; }
+.arah-grup { flex: none; display: flex; gap: 8px; align-items: flex-end; }
+.arah-btn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; width: min(70px, 18vw); height: 104px; border-radius: 14px; border: 3px solid #000; background: #2a3138; color: #ffd400; font-size: 30px; box-shadow: 0 5px 0 #000; }
+.arah-btn.on { background: #ffd400; color: #111; transform: translateY(4px); box-shadow: 0 1px 0 #000; }
 .klakson { flex: none; align-self: center; width: min(46px, 11vw); height: min(46px, 11vw); border-radius: 50%; border: 2px solid #000; background: #2a3138; color: #ffd400; font-weight: 800; font-size: 12px; touch-action: none; box-shadow: 0 3px 0 #000; }
 .klakson.on { background: #ffd400; color: #111; transform: translateY(2px); box-shadow: 0 1px 0 #000; }
-.lajur-grup { flex: none; display: flex; gap: 8px; align-items: flex-end; }
-.lajur-btn { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; width: min(60px, 15vw); height: 96px; border-radius: 14px; border: 3px solid #000; background: #2a3138; color: #ffd400; font-size: 26px; box-shadow: 0 5px 0 #000; }
-.lajur-btn.on { background: #ffd400; color: #111; transform: translateY(4px); box-shadow: 0 1px 0 #000; }
-.nyetir[data-kontrol="lajur"] .setir, .nyetir[data-kontrol="bebas"] .lajur-grup { display: none; }
-.ny-tengah { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; align-self: stretch; justify-content: space-between; }
-.gigi { touch-action: none; user-select: none; -webkit-user-select: none; width: min(58px, 14vw); padding: 9px 0; border-radius: 10px; border: 2px solid #000; background: #2a3138; color: #fff; font-weight: 800; font-size: 10.5px; letter-spacing: .02em; box-shadow: 0 3px 0 #000; }
-.gigi.on { background: #fffbe6; color: #111; }
-.gigi:active { transform: translateY(2px); box-shadow: 0 1px 0 #000; }
 .pedal-grup { display: flex; align-items: flex-end; gap: 8px; }
 .rem, .gaspol { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; border: 3px solid #000; border-radius: 14px; color: #fff; font-family: var(--display); box-shadow: 0 5px 0 #000; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 4px, transparent 4px 11px); }
-.rem { width: min(84px, 20vw); height: 86px; font-size: 20px; background-color: var(--rem); }
-.gaspol { width: min(88px, 21vw); height: 118px; font-size: 22px; background-color: #1f9d55; }
+.rem { width: min(80px, 20vw); height: 104px; font-size: 26px; background-color: var(--rem); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1; }
+.gaspol { width: min(84px, 21vw); height: 118px; font-size: 28px; background-color: #1f9d55; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1; }
+.rem small, .gaspol small { font-size: 13px; letter-spacing: .02em; }
 .rem.on, .gaspol.on { transform: translateY(4px) scaleY(.96); box-shadow: 0 1px 0 #000; filter: brightness(.85); }
 .ny-kam { position: absolute; z-index: 1; left: 8px; top: 62px; background: rgba(17,24,30,.8); color: #fff; border: 1.5px solid rgba(255,255,255,.25); border-radius: 99px; padding: 6px 11px; font-weight: 700; font-size: 12px; }
 .ny-kam:active { transform: translateY(1px); }

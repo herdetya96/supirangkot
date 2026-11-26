@@ -158,22 +158,35 @@ Bab 1, peluang lunas tepat waktu (hari ke-30):
 | Atur tenaga dengan cermat, semesteran dibayar | 97% |
 
 Bab 2, rata-rata hari sampai 5 angkot (pemain ikut narik): setoran bawaan 36 hari; setoran 0,65 × bersih trayek 35 hari;
-0,80 → 33 hari dengan rata-rata 1 sopir pergi; 1,0 → 32 hari dengan 2,5 sopir pergi dan nama baik anjlok;
-0,40 → 43 hari. Tanpa ikut narik: sekitar 70 hari, dan 22% permainan tidak sampai.
+0,80 → 33 hari dengan rata-rata 1 sopir pergi; 1,0 → 33 hari dengan 2,6 sopir pergi dan nama baik anjlok;
+0,40 → 43 hari. Tanpa ikut narik: sekitar 71 hari, dan 18% permainan tidak sampai.
+Semua angkot di trayek 05 dengan dua kredit (tanpa buka trayek lain): 47 hari, 21% permainan pernah kena jual paksa
+(sebelum perbaikan setoran wajar dan kurva rebutan: 57 hari, 40%, dan 2,2 sopir pergi).
+
+Rebutan penumpang: angkotmu sendiri di satu trayek dikali `G.crowdF(n)` = 1 / (1 + 0,12 (n − 1)), jadi tiap angkot
+tambahan tetap menambah tapi makin sedikit (total 1; 1,79; 2,42; 2,94; 3,38). Setoran yang belum diubah pemain
+(`a.setoranSet` kosong) mengikuti `G.fairSetoran`: 0,56 × bersih trayek, diturunkan kalau trayek sesak supaya sopir
+membawa pulang kebutuhan × 1,25 di hari biasa. Disinkronkan (`syncSetoran`) tiap armada/trayek/sopir berubah, dan tiap
+pagi kalau selisihnya ≥ Rp 20 rb. Tombol "Setoran wajar" di kartu angkot mengembalikan ke otomatis. Angkot baru masuk
+trayek berizin yang paling sepi (`bestRoute`). Layar Beli angkot menampilkan perkiraan tambahan pemasukan per trayek
+(`G.buyPreview`, menyalin state lalu menghitung `G.ownerDay`). Kas minus di Bab 2+ memicu adegan pembukuan Dimas
+(`kasWarn`, paling sering sekali seminggu) sebelum jual paksa di −Rp 800 rb. Urutan trayek selalu `G.RIDS`
+(`Object.keys` menaruh '12' duluan).
 
 Bab 3, peluang menang sidang (bot ikut narik, setoran bawaan, nama baik bot ±90):
 
 | Gaya main | Menang | Skor rata-rata |
 |---|---|---|
-| 2 angkot di 05, semua uji KIR, tebus halaman | 97% | 99 |
-| 3 angkot di 05, sama | 97% | 98 (uang akhir ±2,4 jt lebih sedikit) |
-| 1 angkot di 05, sama | 63% | 74 |
-| 2 di 05, KIR, tanpa halaman | 97% | 84 |
-| 2 di 05, halaman, tanpa uji KIR | 16% | 69 |
-| Selalu pilihan terakhir | 0% | 32 |
+| 2 angkot di 05, semua uji KIR, tebus halaman | 100% | 100 |
+| 3 angkot di 05, sama | 99% | 100 (uang akhir ±2 jt lebih sedikit) |
+| 1 angkot di 05, sama | 93% | 88 |
+| 2 di 05, KIR, tanpa halaman | 99% | 85 |
+| 2 di 05, halaman, tanpa uji KIR | 21% | 71 |
+| Selalu pilihan terakhir | 3% | 38 |
 
 Karena nama baik bot hampir selalu di atas 70, pilar paguyuban hampir selalu penuh di sim. Pemain sungguhan
-mungkin lebih sering kehilangan pilar ini.
+mungkin lebih sering kehilangan pilar ini. Sejak setoran wajar, sopir jarang tertekan, jadi nama baik bot lebih tinggi
+dan "1 angkot di 05" naik dari 63% ke 93%. Kalau Bab 3 terasa terlalu mudah, naikkan `G.B3.target` (petisi).
 
 Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain sungguhan.
 
@@ -181,9 +194,6 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
 
 - Bab 4–5 (masuknya ojol, integrasi Pemkot dan beberapa akhir cerita). Bab 3 berakhir dengan kartu "Bersambung"
   dan permainan tetap bisa lanjut tanpa target bab.
-- Masalah ekonomi Bab 2 yang terlihat saat menguji Bab 3: kalau 5 angkot semuanya di trayek 05 dan masih ada dua cicilan
-  kredit, uang turun ratusan ribu per hari bahkan tanpa angkot biru, lalu angkot terjual paksa di −Rp 800 rb.
-  Adegan pembuka Bab 3 sekarang memberi peringatan, tapi akar masalahnya di Bab 2 belum diseimbangkan.
 - Simpan lintas perangkat, suara, tutorial bertahap, pencapaian, berbagi tangkapan layar.
 - Pendapatan saat pemain pergi sudah ada (`G.offline`, maks 8 jam, hanya Bab 2) tapi belum diseimbangkan.
 - Peta siang di layar rit masih skematis (SVG). Gambar angkot menu sekarang render Blender per warna; `angkot.webp`

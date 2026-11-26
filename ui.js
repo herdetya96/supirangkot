@@ -54,12 +54,12 @@ function angkotCard(a) {
   const p = G.project(S, a), dr = G.drv(S, a);
   let opt = `<option value="">Kosong</option><option value="self" ${a.driver === 'self' ? 'selected' : ''}>Kamu sendiri</option>`;
   for (const d of Object.values(S.drivers)) if (d.hired) { const at = S.fleet.find(b => b.driver === d.id && b !== a); opt += `<option value="${d.id}" ${a.driver === d.id ? 'selected' : ''}>${esc(G.DRIVERS[d.id].name)}${at ? ' (dari ' + esc(at.name) + ')' : ''}</option>`; }
-  let ropt = ''; for (const r of Object.values(G.ROUTES)) if (S.routes[r.id]) { const full = a.route !== r.id && G.kuotaFull(S, r.id, a); ropt += `<option value="${r.id}" ${a.route === r.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${r.id} · ${esc(r.name)}${full ? ' (kuota penuh)' : ''}</option>`; }
+  let ropt = ''; for (const r of G.RIDS.map(k => G.ROUTES[k])) if (S.routes[r.id]) { const full = a.route !== r.id && G.kuotaFull(S, r.id, a); ropt += `<option value="${r.id}" ${a.route === r.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${r.id} · ${esc(r.name)}${full ? ' (kuota penuh)' : ''}</option>`; }
   let low = '';
   if (dr) {
     const D = G.DRIVERS[dr.id]; const st = !p.pressured ? ['ok', 'Cukup'] : p.paid < a.setoran ? ['bad', 'Nombok'] : ['warn', 'Mepet, dia bakal ngebut'];
     low = `<div class="fld">Setoran per hari<div class="setoran"><button class="step" data-act="set" data-id="${a.id}" data-d="-10" aria-label="Kurangi setoran">−</button><span class="val num">${fmt(a.setoran)}</span><button class="step" data-act="set" data-id="${a.id}" data-d="10" aria-label="Tambah setoran">+</button></div></div>
-      <div class="proy"><span>${esc(D.name)} bawa pulang ±<b>${fmt(p.take)}</b>, butuh ${fmt(p.need)}</span><span class="pill ${st[0]}">${st[1]}</span></div>`;
+      <div class="proy"><span>${esc(D.name)} bawa pulang ±<b>${fmt(p.take)}</b>, butuh ${fmt(p.need)}</span><span class="pill ${st[0]}">${st[1]}</span>${a.setoranSet && G.fairSetoran(S, a) !== a.setoran ? `<button class="btn sm" data-act="wajar" data-id="${a.id}">Setoran wajar ${fmt(G.fairSetoran(S, a)).replace('Rp ', '')}</button>` : ''}</div>`;
   } else if (a.driver === 'self') {
     low = `<div class="proy"><span>Perkiraan bersih hari ini ±<b>${fmt(p.net)}</b></span><span class="pill ok">Kamu yang narik</span></div>`;
   } else low = `<div class="proy"><span>Tidak jalan hari ini.</span><span class="pill warn">Belum ada sopir</span></div>`;
@@ -212,10 +212,10 @@ function modalHTML() {
       <div class="item"><h3>Nama dan stiker kaca</h3><p>Gratis. Ini angkotmu.</p><div class="full a-row"><label class="fld">Nama<input id="nm-angkot" maxlength="18" value="${esc(a.name)}"></label><label class="fld">Stiker<input id="st-angkot" maxlength="22" value="${esc(a.stiker)}"></label></div><button class="btn sm full" style="grid-row:auto;grid-column:1/-1" data-act="nama">Simpan</button></div>`);
   }
   if (m.m === 'trayek') {
-    return sheet('Trayek', Object.values(G.ROUTES).map(r => { const lab = [0, 1, 2].map(sh => { const d = G.demand(S, r.id, sh) / (0.9 + S.rep / 500); return `${G.SHIFT[sh]} ${d < 0.8 ? 'sepi' : d < 1.08 ? 'biasa' : d < 1.3 ? 'ramai' : 'ramai sekali'}`; }).join(' · ');
+    return sheet('Trayek', G.RIDS.map(k => G.ROUTES[k]).map(r => { const lab = [0, 1, 2].map(sh => { const d = G.demand(S, r.id, sh) / (0.9 + S.rep / 500); return `${G.SHIFT[sh]} ${d < 0.8 ? 'sepi' : d < 1.08 ? 'biasa' : d < 1.3 ? 'ramai' : 'ramai sekali'}`; }).join(' · ');
       return `<div class="item" style="border-left:8px solid ${RC[r.id]}"><h3>${r.id} · ${esc(r.name)}</h3><p>${esc(r.tip)}</p><p class="full"><b>Hari ini:</b> ${lab}. Bensin ${fmt(Math.round(r.fuel * S.fuelK * 3))} sehari.</p>
         ${S.routes[r.id] ? `<span class="pill ok" style="grid-row:1;grid-column:2">Punya izin</span>` : `<button class="btn sm plat-b" data-act="izin" data-r="${r.id}" ${S.money >= r.izin ? '' : 'disabled'}>Izin ${fmt(r.izin).replace('Rp ', '')}</button>`}</div>`; }).join('')
-      + `<p style="font-size:13px;color:var(--tinta-2)">Makin banyak angkotmu di satu trayek, makin berebut penumpang sendiri: tiap tambahan angkot mengurangi pendapatan 10%.</p>`);
+      + `<p style="font-size:13px;color:var(--tinta-2)">Angkotmu sendiri di satu trayek berebut penumpang. Dua angkot di trayek yang sama masing-masing dapat ±89%, tiga ±81%, empat ±74%, lima ±68%. Setoran yang belum kamu ubah sendiri ikut turun supaya sopirnya tetap cukup.</p>`);
   }
   if (m.m === 'sopir') {
     const hired = Object.values(S.drivers).filter(d => d.hired).map(d => { const D = G.DRIVERS[d.id], a = S.fleet.find(x => x.driver === d.id);
@@ -228,8 +228,12 @@ function modalHTML() {
   }
   if (m.m === 'dealer') {
     const full = S.fleet.length >= G.MAX_FLEET;
-    return sheet('Beli angkot', `<p>Uangmu <b>${fmt(S.money)}</b>. Armada ${S.fleet.length} angkot.</p>` + Object.values(G.DEALER).filter(k => !(k.once && S.flags['beli_' + k.id])).map(k =>
-      `<div class="item"><h3>${esc(k.label)}</h3><p>${esc(k.desc)} Kondisi ${k.cond}.</p><button class="btn sm ijo" data-act="beli" data-k="${k.id}" ${!full && S.money >= k.price ? '' : 'disabled'}>${fmt(k.price).replace('Rp ', '')}</button></div>`).join(''));
+    const r10 = v => Math.max(0, Math.round(v / 10) * 10), pv = G.buyPreview(S), gain = r10(pv.gain);
+    const rows = G.RIDS.filter(r => !(S.routes[r] && G.kuotaFull(S, r))).map(r => { const q = r === pv.route ? pv : G.buyPreview(S, r), g = r10(q.gain);
+      return `<li>Trayek ${r}${S.routes[r] ? '' : ' (perlu izin ' + fmt(G.ROUTES[r].izin) + ')'}: jadi ${q.n} angkot, ${g > 0 ? `tambah ±<b>${fmt(g)}</b>` : '<b>hampir tidak menambah</b>'}${r === pv.route ? ' · <i>masuk sini</i>' : ''}</li>`; }).join('');
+    const est = `<div class="item"><h3>Kalau beli satu lagi</h3><p class="full">Perkiraan tambahan untukmu sehari, setelah setoran sopir dan bensin, belum cicilan dan servis. Angkotmu sendiri di satu trayek saling berebut penumpang.${pv.freeDriver ? '' : ' Kamu juga perlu sopir untuknya.'}</p><ul class="full" style="font-size:13px;margin:2px 0 0;padding-left:18px">${rows}</ul></div>`;
+    return sheet('Beli angkot', `<p>Uangmu <b>${fmt(S.money)}</b>. Armada ${S.fleet.length} angkot. Pengeluaran tetap ${fmt(G.fixedDay(S))} sehari.</p>` + (full ? '' : est) + Object.values(G.DEALER).filter(k => !(k.once && S.flags['beli_' + k.id])).map(k =>
+      `<div class="item"><h3>${esc(k.label)}</h3><p>${esc(k.desc)} Kondisi ${k.cond}.</p>${k.daily && k.daily > gain ? `<p class="full"><span class="pill bad">Cicilan ${fmt(k.daily)} lebih besar dari tambahannya</span></p>` : ''}<button class="btn sm ijo" data-act="beli" data-k="${k.id}" ${!full && S.money >= k.price ? '' : 'disabled'}>${fmt(k.price).replace('Rp ', '')}</button></div>`).join(''));
   }
   if (m.m === 'sidang') {
     const sc = G.sidang(S), B = S.b3, P = G.B3;
@@ -358,6 +362,7 @@ const ACT = {
   close() { U.modal = U.modal && U.modal.back ? { m: U.modal.back } : null; render(); },
   bg(d, e) { if (e.target.dataset.act === 'bg') { U.modal = null; render(); } },
   set(d) { const a = S.fleet.find(x => x.id === d.id); G.setSetoran(S, d.id, a.setoran + (+d.d)); render(); },
+  wajar(d) { G.setoranWajar(S, d.id); render(); },
   servis(d) { if (G.service(S, U.modal.id, d.k)) toast('Servis selesai.'); render(); },
   up(d) { if (G.upgrade(S, U.modal.id, d.k)) toast(G.UPGRADES[d.k].name + ' terpasang.'); render(); },
   cat(d) { G.paint(S, U.modal.id, d.c); render(); },

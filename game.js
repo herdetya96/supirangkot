@@ -15,6 +15,7 @@ G.ROUTES = {
   '12': { id: '12', name: 'Pasar Baru – Stasiun – Griya Asri', base: [160, 112, 176], fuel: 40, wear: 1.4, izin: 1500,
     tip: 'Jauh dan boros, tapi paling gemuk. Hujan bikin macet. Jumat sore ramai.' }
 };
+G.RIDS = ['05', '09', '12'];   // urutan tetap (Object.keys menaruh '12' duluan karena angka)
 G.DRIVERS = {
   ujang: { id: 'ujang', name: 'Mang Ujang', age: 54, skill: 1.08, g: 0.97, w: 0.8, need: 85, tag: 'Kalem',
     bio: 'Tiga puluh tahun di jalan. Pelan, mesin awet.', perk: 'Jadi mandor: semua angkot lebih awet.' },
@@ -95,6 +96,9 @@ function newAngkot(s, o) {
 }
 
 /* ---------- permintaan penumpang ---------- */
+/* angkotmu sendiri di satu trayek berebut penumpang: tiap angkot tambahan tetap menambah, tapi makin sedikit
+   (1 → 1,0; 2 → 1,79; 3 → 2,42; 4 → 2,94; 5 → 3,38 kali penumpang satu angkot) */
+G.crowdF = n => 1 / (1 + 0.12 * Math.max(0, n - 1));
 G.demand = function (s, rid, sh, day, wx) {
   const d = G.cal(s, day || s.day); const w = wx || s.wx.today; let m = 1;
   if (rid === '05') { if (d.dow === 6 && sh === 0) m *= 1.25; if (d.dom <= 5) m *= 1.18; if (d.dom >= 25) m *= 0.93; if (w === 'hujan') m *= 1.08; }
@@ -106,8 +110,7 @@ G.demand = function (s, rid, sh, day, wx) {
     if (md.shift != null && md.shift !== sh) continue;
     if (md.demand) m *= md.demand;
   }
-  const n = s.fleet.filter(a => a.route === rid && a.driver && !a.off).length;
-  m *= Math.max(0.6, 1 - 0.10 * (n - 1));
+  m *= G.crowdF(G.crowd(s, rid));
   m *= 0.9 + s.rep / 500;
   return m * s.tarifK;
 };
@@ -126,6 +129,49 @@ function drvStyle(s, a, dr) {
   if (pressured) { g *= 1.05; w *= 1.8; risk += 0.07; }
   return { g, w, f, risk, sk, pressured, vary: D.vary || 0 };
 }
+/* Setoran wajar: separuh lebih sedikit dari bersih trayek, tapi diturunkan kalau trayeknya sesak,
+   supaya sopir tetap bawa pulang kebutuhannya × 1,25 di hari biasa (cuaca dan tanggal netral). */
+G.crowd = (s, rid, extra) => s.fleet.filter(a => a.route === rid && a.driver && !a.off).length + (extra || 0);
+G.fairSetoran = function (s, a) {
+  const dr = G.drv(s, a); const top = Math.round(G.expNet(a.route) * 0.56 / 10) * 10;
+  if (!dr) return top;
+  const D = G.DRIVERS[dr.id], Rt = G.ROUTES[a.route];
+  let m = G.crowdF(G.crowd(s, a.route)) * (0.9 + s.rep / 500) * s.tarifK;
+  for (const md of s.mods) if (md.demand && md.shift == null && (!md.route || md.route === a.route) && (!md.until || s.day <= md.until)) m *= md.demand;
+  const gross = (Rt.base[0] + Rt.base[1] + Rt.base[2]) * m * dr.skill * (D.g || 1) * upF(a);
+  const net = gross - 3 * fuelOf(s, a) * (D.f || 1);
+  return clamp(Math.min(top, Math.round((net - D.need * 1.25) / 10) * 10), 60, 260);
+};
+/* Setoran yang belum diubah pemain ikut keramaian trayek. min: beda minimal sebelum diubah (hindari naik-turun tiap hari). */
+function syncSetoran(s, min) {
+  for (const a of s.fleet) {
+    if (a.setoranSet || !G.drv(s, a)) continue;
+    const f = G.fairSetoran(s, a); if (Math.abs(f - a.setoran) >= (min || 0)) a.setoran = f;
+  }
+}
+G.syncSetoran = syncSetoran;
+/* pemasukan pemilik sehari (perkiraan): hasil narik sendiri + setoran sopir */
+G.ownerDay = s => s.fleet.reduce((t, a) => { const p = G.project(s, a); return t + (!p ? 0 : a.driver === 'self' ? p.net : p.paid); }, 0);
+G.fixedDay = s => G.living(s) + s.fleet.reduce((t, a) => t + (a.loan ? a.loan.daily : 0), 0) + (s.flags.preman_bayar ? 20 * G.active(s).length : 0);
+/* trayek untuk angkot baru: yang paling sepi dari angkotmu sendiri */
+function bestRoute(s, except) {
+  let best = null, bn = 1e9;
+  for (const r of G.RIDS) {
+    if (!s.routes[r] || (except && G.kuotaFull(s, r, except))) continue;
+    const n = s.fleet.filter(a => a !== except && a.route === r).length; if (n < bn) { bn = n; best = r; }
+  }
+  return best || '05';
+}
+/* perkiraan tambahan pemasukan kalau beli satu angkot lagi dan diberi sopir biasa */
+G.buyPreview = function (s, rid) {
+  const c = JSON.parse(JSON.stringify(Object.assign({}, s, { today: Object.assign({}, s.today, { _choices: null }) })));
+  const before = G.ownerDay(c);
+  const a = newAngkot(c, { name: '?', cond: 70 }); a.route = rid || bestRoute(c, a);
+  if (!c.drivers.ujang) c.drivers.ujang = { id: 'ujang', hired: true, loyalty: 50, skill: 1.0, days: 0, short: 0 };
+  a.driver = 'ujang'; syncSetoran(c);
+  return { route: a.route, n: G.crowd(c, a.route), gain: G.ownerDay(c) - before, freeDriver: G.freeDrivers(s).length > 0 };
+};
+
 /* perkiraan satu hari untuk satu angkot (tanpa acak) */
 G.project = function (s, a) {
   if (!a.driver) return null;
@@ -166,6 +212,7 @@ G.startDay = function (s) {
     if (nx) s.cand.push(nx);
   }
   s.mods = s.mods.filter(m => !m.until || s.day <= m.until);
+  syncSetoran(s, 20);
 };
 
 G.depart = function (s) {
@@ -466,7 +513,7 @@ G.endDay = function (s) {
   for (const a of s.fleet) {
     const dr = G.drv(s, a); if (!dr) continue; const D = G.DRIVERS[dr.id];
     if (dr.loyalty < 25 && dr.id === 'ujang') {
-      a.setoran = Math.round(G.expNet(a.route) * 0.5 / 10) * 10; dr.loyalty = 40; rep(s, -3);
+      a.setoran = Math.round(G.expNet(a.route) * 0.5 / 10) * 10; a.setoranSet = true; dr.loyalty = 40; rep(s, -3);
       adhoc(s, 'malam', [['ujang', 'Saya tidak ikut bapakmu dua belas tahun buat diperas anaknya.'], ['ujang', `Mulai besok setoran saya ${G.fmt(a.setoran)}. Kalau tidak terima, cari sopir lain.`], ['narator', 'Sopir-sopir di warung mendengar semuanya. Nama baik turun.']]);
     } else if (dr.loyalty < 25) {
       adhoc(s, 'malam', [['narator', `${D.name} mengembalikan kunci ${a.name} malam ini.`], [dr.id, 'Maaf, Bos. Di tempat Haji Sobari setorannya lebih masuk akal.'], ['narator', `${D.name} berhenti dan cerita ke mana-mana. ${a.name} sekarang tanpa sopir, nama baikmu turun.`]]);
@@ -499,13 +546,36 @@ G.endDay = function (s) {
     }
   }
   if (s.money < 0) rep(s, -1);
+  if (s.bab >= 2 && s.money < 0 && s.money >= -800 && !(s.flags.warnKas > s.day - 7)) kasWarn(s);
   if (s.bab >= 2 && s.money < -800 && s.fleet.length > 1) {
     const a = s.fleet.slice().sort((x, y) => x.cond - y.cond)[0];
-    s.fleet = s.fleet.filter(x => x !== a); s.money += 1300;
+    s.fleet = s.fleet.filter(x => x !== a); s.money += 1300; s.flags.dijual = (s.flags.dijual || 0) + 1; syncSetoran(s);
     adhoc(s, 'malam', [['kohar', `Utang warung, utang bengkel, utang bensin. Pak Haji mau bantu: ${a.name} dia beli, Rp 1,3 juta. Tunai.`], ['narator', `Kamu tidak punya pilihan. ${a.name} berpindah tangan dan dicat biru.`]]);
   }
   return { rows, ledger: T.ledger, hit: T.hit, target: T.target, narik: T.narik };
 };
+
+/* Dimas membuka pembukuan saat kas minus: dari mana uang bocor, dan apa yang bisa dilakukan */
+function kasWarn(s) {
+  s.flags.warnKas = s.day;
+  const loans = s.fleet.reduce((t, a) => t + (a.loan ? a.loan.daily : 0), 0), inc = G.ownerDay(s), fixed = G.fixedDay(s);
+  const L = [['dimas', `Kak, kas kita minus ${G.fmt(-s.money)}. Aku hitung pembukuannya semalaman.`]];
+  L.push(['dimas', `Tiap hari pasti keluar ${G.fmt(fixed)}: ${loans ? `cicilan ${G.fmt(loans)}, ` : ''}makan dan rumah ${G.fmt(G.living(s))}. Masuknya ±${G.fmt(inc)}, belum servis dan kejadian di jalan.`]);
+  const sisa = inc - fixed;
+  if (sisa >= 80) L.push(['dimas', `Sebenarnya tiap hari masih sisa ±${G.fmt(sisa)}. Asal jangan belanja besar dulu, kasnya pulih sendiri.`]);
+  else {
+    L.push(['dimas', sisa > 0 ? `Jadi tiap hari cuma sisa ±${G.fmt(sisa)}. Sekali mogok atau ditilang, kita nombok.` : `Jadi tiap hari kita nombok ±${G.fmt(-sisa)}.`]);
+    let top = null, tn = 0; for (const r of G.RIDS) { const n = G.crowd(s, r); if (n > tn) { tn = n; top = r; } }
+    const other = G.RIDS.filter(r => r !== top && s.routes[r]);
+    if (tn >= 3) {
+      L.push(['ujang', `Trayek ${top} isinya ${tn} angkot kita sendiri, Jang. Rebutan penumpang sama saudara sendiri. Tiap mobil cuma dapat sedikit.`]);
+      L.push(['ujang', other.length ? `Pindahkan satu-dua ke trayek ${other.join(' atau ')}.` : 'Jangan tambah mobil di sini lagi. Kumpulkan buat izin trayek lain, lalu pindahkan satu-dua ke sana.']);
+    } else if (loans > inc * 0.4) L.push(['ujang', 'Cicilan itu yang mencekik, Jang. Jangan tambah mobil kredit dulu sebelum yang ini lunas.']);
+    else L.push(['ujang', 'Lihat setoran sopir-sopirmu. Yang nombok terus, nanti ngebut dan mobilnya cepat rusak.']);
+  }
+  L.push(['narator', 'Kalau kas tembus minus Rp 800 rb, Haji Sobari akan “membantu” dengan membeli salah satu angkotmu.']);
+  adhoc(s, 'malam', L);
+}
 
 /* Bab 3: petisi harian dan hasil sidang */
 G.petisiOf = function (s, a) {
@@ -533,10 +603,11 @@ function kuotaFix(s) {
   let n = 0;
   for (const a of s.fleet) {
     if (a.route !== '05') continue; n++; if (n <= s.kuota05) continue;
-    let r = Object.keys(s.routes).find(k => k !== '05' && s.routes[k]);
+    let r = G.RIDS.find(k => k !== '05' && s.routes[k]);
     if (!r) { s.routes['09'] = true; r = '09'; s.flags.izin_ganti = true; }
-    a.route = r; if (!a.setoranSet) a.setoran = Math.round(G.expNet(r) * 0.56 / 10) * 10;
+    a.route = r;
   }
+  syncSetoran(s);
 }
 G.sidang = function (s) {
   const B = s.b3 || { petisi: 0 };
@@ -585,10 +656,12 @@ G.assign = function (s, aid, who) {
   const a = s.fleet.find(x => x.id === aid); if (!a) return;
   if (who) for (const b of s.fleet) if (b !== a && b.driver === who) b.driver = null;
   a.driver = who || null;
-  if (who && who !== 'self') { const en = G.expNet(a.route); a.setoran = clamp(a.setoran, 60, 260); if (!a.setoranSet) a.setoran = Math.round(en * 0.56 / 10) * 10; }
+  if (who && who !== 'self') a.setoran = clamp(a.setoran, 60, 260);
+  syncSetoran(s);
 };
-G.setRoute = function (s, aid, rid) { const a = s.fleet.find(x => x.id === aid); if (a && s.routes[rid] && a.route !== rid && !G.kuotaFull(s, rid, a)) { a.route = rid; if (!a.setoranSet) a.setoran = Math.round(G.expNet(rid) * 0.56 / 10) * 10; } };
+G.setRoute = function (s, aid, rid) { const a = s.fleet.find(x => x.id === aid); if (a && s.routes[rid] && a.route !== rid && !G.kuotaFull(s, rid, a)) { a.route = rid; syncSetoran(s); } };
 G.setSetoran = function (s, aid, v) { const a = s.fleet.find(x => x.id === aid); if (a) { a.setoran = clamp(Math.round(v / 10) * 10, 60, 260); a.setoranSet = true; } };
+G.setoranWajar = function (s, aid) { const a = s.fleet.find(x => x.id === aid); if (a) { a.setoranSet = false; a.setoran = G.fairSetoran(s, a); } };
 G.hire = function (s, id) {
   if (!s.cand.includes(id)) return false; const D = G.DRIVERS[id];
   s.cand = s.cand.filter(x => x !== id);
@@ -596,14 +669,14 @@ G.hire = function (s, id) {
   if (id === 'jajang') s.flags.kernet = false;
   return true;
 };
-G.fire = function (s, id) { const dr = s.drivers[id]; if (!dr || id === 'ujang') return false; dr.hired = false; dr.gone = true; for (const a of s.fleet) if (a.driver === id) a.driver = null; return true; };
+G.fire = function (s, id) { const dr = s.drivers[id]; if (!dr || id === 'ujang') return false; dr.hired = false; dr.gone = true; for (const a of s.fleet) if (a.driver === id) a.driver = null; syncSetoran(s); return true; };
 G.buy = function (s, kind) {
   const K = G.DEALER[kind]; if (s.bab < 2 || s.fleet.length >= G.MAX_FLEET || s.money < K.price) return null;
   if (K.once) { if (s.flags['beli_' + kind]) return null; s.flags['beli_' + kind] = true; }
   cash(s, -K.price, 'Beli angkot');
   const used = s.fleet.map(a => a.name); const name = G.NAMES.find(n => !used.includes(n)) || ('Angkot ' + (s.fleet.length + 1));
   const a = newAngkot(s, { name, cond: K.cond, mesin: K.mesin, loan: K.daily ? { daily: K.daily, left: K.days } : null });
-  a.route = G.kuotaFull(s, '05', a) ? (Object.keys(s.routes).find(k => k !== '05' && s.routes[k]) || '05') : '05'; s.today.per[a.id] = { gross: 0, fuel: 0, mult: [1, 1, 1], notes: [] };
+  a.route = bestRoute(s, a); s.today.per[a.id] = { gross: 0, fuel: 0, mult: [1, 1, 1], notes: [] };
   return a;
 };
 G.rename = function (s, aid, name, stiker) { const a = s.fleet.find(x => x.id === aid); if (!a) return; if (name) a.name = name.slice(0, 18); if (stiker != null) a.stiker = stiker.slice(0, 22).toUpperCase(); };

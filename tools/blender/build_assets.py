@@ -1469,9 +1469,7 @@ def palang():
 
 if __name__ == '__main__':
     print('Membuat aset ke', OUT)
-    angkot('05', 'angkot')
-    for no in ('05', '09', '12'):
-        angkot(no, 'angkot_' + no)
+    # angkot sekarang dibuat dari model detail tinggi: tools/blender/angkot/ringan.py (angkot() di sini tetap ada sebagai cadangan)
     for fn in (mobil, pikap, truk, motor, kereta, orang, pohon_mangga, pohon_kelapa, lampu_jalan, lampu_merah, gerobak, ruko, rumah, warung):
         fn()
     for fn in (lm_terminal, lm_pasar, lm_masjid, lm_sekolah, lm_spbu, lm_alun, lm_kampus, lm_stasiun, lm_griya, rumah_jauh, pohon_jauh, palang):

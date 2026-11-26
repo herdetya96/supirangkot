@@ -10,6 +10,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.environ.get("OUT", os.path.normpath(os.path.join(HERE, "..", "..", "..", "art", "angkot")))
 os.makedirs(OUT, exist_ok=True)
 FONT = os.environ.get("FONT", "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf")
+# TRAYEK=09 / 12 membuat varian trayek lain (nomor, tulisan rute, pelat); dipakai tools/blender/angkot/ringan.py
+TRAYEK = os.environ.get("TRAYEK", "05")
+RUTE = {"05": "TERMINAL - PASAR BARU", "09": "TERMINAL - KAMPUS", "12": "PASAR BARU - GRIYA ASRI"}[TRAYEK]
+PLAT = "F 17" + TRAYEK + " AK"
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene; col = scene.collection
 
@@ -282,7 +286,7 @@ ro = cube("WSRubberO", tuple(ws_point(0.42, 0, 0.002)), (0.008, 1.43, 0.67), RUB
 ri = cube("WSRubberI", tuple(ws_point(0.42, 0, 0.002)), (0.05, 1.40, 0.64), RUBBER, rot=(0, PHI, 0), bevel=0.07, segs=5)
 boolean(ro, ri, transfer=False); PARTS.append(ro)
 PARTS.append(cube("SunStrip", tuple(ws_point(0.70, 0, -0.009)), (0.002, 1.40, 0.09), TINT, rot=(0, PHI, 0)))
-PARTS.append(text("SunStripText", "TERMINAL  -  PASAR BARU", 0.045, tuple(ws_point(0.70, 0, -0.0075)), "-x", WHITE))
+PARTS.append(text("SunStripText", RUTE.replace(" - ", "  -  "), 0.045, tuple(ws_point(0.70, 0, -0.0075)), "-x", WHITE))
 PARTS[-1].rotation_euler = (math.pi / 2 - 0, 0, -math.pi / 2)
 # rear glass
 PARTS.append(prism("RearGlass", rrect((-0.57, 1.12), (0.57, 1.68), 0.08), "x", 2.0 - 0.016, 2.0 - 0.010, GLASS))
@@ -321,14 +325,14 @@ for side, segs in ((-1, [(-1.96, -0.95), (-0.10, 1.97)]), (1, [(-1.96, 1.97)])):
 for z0, z1, m in ((0.95, 1.00, WHITE), (1.01, 1.03, YELLOW)):
     PARTS.append(box("RearStripe", 2.0, 2.0014, -0.78, 0.78, z0, z1, m))
 # lettering
-PARTS.append(text("RouteR", "TERMINAL - PASAR BARU", 0.10, (0.45, HW + 0.0025, 0.82), "+y", WHITE))
-PARTS.append(text("RouteL", "TERMINAL - PASAR BARU", 0.085, (0.95, -HW - 0.0025, 0.82), "-y", WHITE))
+PARTS.append(text("RouteR", RUTE, 0.10, (0.45, HW + 0.0025, 0.82), "+y", WHITE))
+PARTS.append(text("RouteL", RUTE, 0.085, (0.95, -HW - 0.0025, 0.82), "-y", WHITE))
 for side, f in ((1, "+y"), (-1, "-y")):
-    PARTS.append(text("No", "05", 0.30, (-1.55, side * (HW + 0.0025), 0.70), f, WHITE))
+    PARTS.append(text("No", TRAYEK, 0.30, (-1.55, side * (HW + 0.0025), 0.70), f, WHITE))
     PARTS.append(text("Trayek", "TRAYEK", 0.065, (-1.55, side * (HW + 0.0025), 0.88), f, YELLOW))
     PARTS.append(text("Koperasi", "KOPERASI ANGKUTAN KOTA", 0.032, (0.45 if side > 0 else 0.95, side * (HW + 0.0025), 0.70), f, YELLOW))
-PARTS.append(text("RearNo", "05", 0.26, (2.0025, 0.0, 0.72), "+x", WHITE))
-PARTS.append(text("RearRoute", "TERMINAL - PASAR BARU", 0.06, (2.0025, 0.0, 1.07), "+x", WHITE))
+PARTS.append(text("RearNo", TRAYEK, 0.26, (2.0025, 0.0, 0.72), "+x", WHITE))
+PARTS.append(text("RearRoute", RUTE, 0.06, (2.0025, 0.0, 1.07), "+x", WHITE))
 
 # ================================================================ front end
 for s_ in (1, -1):
@@ -347,7 +351,7 @@ for k in range(5):
 PARTS.append(box("FrontBumper", -2.12, -1.98, -0.83, 0.83, 0.38, 0.55, BLACK, bevel=0.03, segs=4))
 PARTS.append(box("BumperLip", -2.125, -2.10, -0.80, 0.80, 0.53, 0.545, CHROME))
 PARTS.append(box("FrontPlate", -2.128, -2.122, -0.20, 0.20, 0.405, 0.525, PLATE, bevel=0.004))
-PARTS.append(text("FrontPlateTxt", "F 1705 AK", 0.075, (-2.1295, 0, 0.462), "-x", INK))
+PARTS.append(text("FrontPlateTxt", PLAT, 0.075, (-2.1295, 0, 0.462), "-x", INK))
 PARTS.append(box("TowHook", -2.14, -2.10, 0.42, 0.47, 0.40, 0.43, BLACK))
 # wipers
 for y0 in (-0.55, 0.05):
@@ -363,7 +367,7 @@ for s_ in (1, -1):
 # roof route sign
 PARTS.append(box("SignBox", -1.42, -1.30, -0.56, 0.56, 1.92, 2.13, BLACK, bevel=0.01))
 PARTS.append(box("SignFace", -1.425, -1.418, -0.53, 0.53, 1.94, 2.11, SIGNW))
-PARTS.append(text("SignTxt", "05  TERMINAL - PASAR BARU", 0.085, (-1.427, 0, 2.025), "-x", PAINT))
+PARTS.append(text("SignTxt", TRAYEK + "  " + RUTE, 0.085, (-1.427, 0, 2.025), "-x", PAINT))
 for y in (-0.40, 0.40):
     PARTS.append(box("SignLeg", -1.38, -1.34, y - 0.02, y + 0.02, 1.88, 1.93, BLACK))
 
@@ -377,7 +381,7 @@ for s_ in (1, -1):
 PARTS.append(box("RearBumper", 1.98, 2.12, -0.83, 0.83, 0.36, 0.52, BLACK, bevel=0.03, segs=4))
 PARTS.append(box("RearStep", 2.00, 2.16, -0.32, 0.32, 0.515, 0.535, CHECKER, bevel=0.004))
 PARTS.append(box("RearPlate", 2.122, 2.128, -0.20, 0.20, 0.385, 0.505, PLATE, bevel=0.004))
-PARTS.append(text("RearPlateTxt", "F 1705 AK", 0.075, (2.1295, 0, 0.442), "+x", INK))
+PARTS.append(text("RearPlateTxt", PLAT, 0.075, (2.1295, 0, 0.442), "+x", INK))
 PARTS.append(cyl("Exhaust", (1.95, -0.45, 0.26), 0.026, 0.40, CHROME, rot=(0, math.pi / 2, 0), verts=24, fill="NOTHING"))
 
 # ================================================================ doorway hardware

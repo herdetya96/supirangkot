@@ -694,7 +694,11 @@ function createImpl(canvas, S, spec, o) {
   const body = { roll: 0, pitch: 0 };
   const brakeMat = new T.MeshBasicMaterial({ color: C('#5a1410').clone() }); mats.push(brakeMat);
   const revMat = new T.MeshBasicMaterial({ color: C('#3a3a34').clone() }); mats.push(revMat);
-  if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); const r = new T.Mesh(new T.BoxGeometry(3.4, 5, 1), revMat); r.position.set(sx * 14, 21.5, 42.6); me.add(r); } }
+  const meName = hasAsset('angkot_' + spec.route) ? 'angkot_' + spec.route : 'angkot';
+  if (hasAsset(meName) && AS.geo[meName].rem) {
+    // lampu rem dan lampu mundur ikut model (mesh 'rem' dan 'mundur'), warnanya diatur tiap frame
+    me.add(new T.Mesh(assetGeo(meName, 'rem'), brakeMat)); if (AS.geo[meName].mundur) me.add(new T.Mesh(assetGeo(meName, 'mundur'), revMat));
+  } else if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); const r = new T.Mesh(new T.BoxGeometry(3.4, 5, 1), revMat); r.position.set(sx * 14, 21.5, 42.6); me.add(r); } }
   else { const brake = new T.Mesh(new T.BoxGeometry(40, 5, 1.5), brakeMat); brake.position.set(0, 16.5, 43.2); me.add(brake); }
   // kendaraan lain
   const cars = S.cars.map(m => ({ o: m, mesh: m.kind === 'motor' ? mk('motor', ...motorCols(m.hue)) : mk(m.kind, A.CARC[m.hue % 8]) }));

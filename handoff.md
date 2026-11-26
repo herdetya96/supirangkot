@@ -55,6 +55,11 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
     varian 05/09/12). Skrip: `tools/blender/karakter/ringan.py`, `tools/blender/angkot/ringan.py`. Belum diukur fps di HP;
     bundel model naik dari 2,9 MB ke 4,8 MB. Pengendara motor masih model lama.
 
+18. "Motornya juga pake model detail, animasikan orang masuk angkotnya, orang jalan, dll". Motor skuter detail dibuat
+    sendiri (`art/motor`, tidak ada unggahan motor), versi game dengan pengendara duduk. Orang punya kerangka dan animasi
+    di vertex shader: melangkah, melambai, naik ke pintu angkot, turun ke trotoar. Pengendara motor belum bergerak
+    (pose duduk tetap), roda tidak berputar.
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 

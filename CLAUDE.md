@@ -83,6 +83,15 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   Mesh `kulit`, `baju`, `celana`, `rambut` putih × warna per orang, `lain` (mata, sandal, handuk, peci, kancing) warna tetap.
   `drive3d.js` (`ORANG`, `pv`) membagi pejalan dan penumpang ke empat bentuk badan ini, satu InstancedMesh per bagian per bentuk;
   warna rambut dari `HAIR`. Kalau gagal dimuat, kembali ke `orang.glb` lama.
+  Animasi: `ringan.py` juga membuat kerangka sederhana (sendi pinggul, lutut, bahu, siku diukur dari badan, `ukur_sendi`),
+  menghitung bobot panas Blender di badan utuh lalu menyalinnya ke baju/celana dari titik terdekat (DATA_TRANSFER), dipertegas
+  (0,3–0,7), dan menyimpannya sebagai atribut glTF `_LEGL _LEGR _KNEEL _KNEER _ARML _ARMR _ELBL _ELBR` plus posisi sendi di
+  custom property `sendi` (mesh `kulit`). `tools/pack_models.js` membawa atribut `_*` (uint8) dan `extras`. Di `drive3d.js`
+  (`ANIM_GLSL`, `animMat`) titik diputar di vertex shader (juga material bayangan) dari `aAnim` per orang = (fase, langkah,
+  lambai): pejalan melangkah sesuai jarak tempuh, orang terdepan di rombongan melambai ke angkot yang mendekat,
+  penumpang yang naik berjalan ke pintu kiri angkot lalu hilang ke dalam (`walkers`, `spawnNaik`, juga ke angkot biru yang
+  menyerobot), yang turun keluar dari pintu ke trotoar lalu pergi (`spawnTurun`). Hanya tampilan; jumlah penumpang tetap
+  diatur `Sim`. `tools/blender/karakter/pose.py` = rumus pose yang sama di Python (untuk pengendara motor dan pemeriksaan).
 - Angkot detail tinggi (`art/angkot/`, ±134 ribu segitiga, 196 mesh): aset seni, bukan aset game, dibuat `npm run angkot-detail`
   (`tools/blender/angkot/build.py`, ±1 menit, butuh `pip install bpy`). Sama seperti karakter: jangan taruh `.glb`-nya di `assets/models/`.
   `build.py` menerima `TRAYEK=05|09|12` (nomor, tulisan rute, pelat). Angkot game sekarang versi ringannya:
@@ -90,7 +99,12 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   lis dan karet ×0,4, badan ×0,6; tulisan koperasi, pelat, dan strip kaca dibuang), warna material → warna per sudut (cat hijau
   → penanda CAT), diputar menghadap +Y, diskalakan (1,10 lebar, 0,845 panjang, 0,95 tinggi) supaya pas kotak tabrakan 3,4 × 1,76 m.
   Lampu rem = mesh `rem`, lampu mundur = mesh `mundur` (diwarnai `brakeMat`/`revMat` di `drive3d.js`). Hasilnya `angkot.glb`
-  dan `angkot_05/09/12.glb`; fungsi `angkot()` lama di `build_assets.py` tidak dipanggil lagi. Bundel `assets/models.js` ±4,8 MB.
+  dan `angkot_05/09/12.glb`; fungsi `angkot()` lama di `build_assets.py` tidak dipanggil lagi. Bundel `assets/models.js` ±5 MB.
+- Motor detail (`art/motor/`, `tools/blender/motor/build.py`, `npm run motor-detail`): skuter matic ±28 ribu segitiga, depan +Y.
+  Versi game `tools/blender/motor/ringan.py`: `motor_parkir.glb` (±3.600) dan `motor.glb` (±6.500, dengan pengendara Dimas yang
+  didudukkan lewat `pose.py`: sudut lutut dicari supaya telapak di dek, bahu/siku supaya tangan dekat setang; plus helm).
+  Cat = CAT, baju pengendara = KEDUA (jaket), helm = KETIGA. `motor()` lama di `build_assets.py` tidak dipanggil lagi.
+  Kotak tabrakan motor di `drive.js` (`KIND.motor`) jadi 18 × 44 supaya sesuai panjang model.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 

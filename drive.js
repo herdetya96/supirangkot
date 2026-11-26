@@ -16,7 +16,7 @@ const SLIDE_MAX = 40;
 const K_MAX = 1 / 55, A_LAT = 200;
 // mundur: laju maksimum dan percepatan. YAW_MAX = sudut badan maksimum bot saat pindah lajur.
 const V_REV = 90, ACC_REV = 110, YAW_MAX = 0.2;
-const KIND = { motor: { w: 16, l: 34 }, mobil: { w: 34, l: 66 }, pikap: { w: 36, l: 76 }, truk: { w: 44, l: 118 } };
+const KIND = { motor: { w: 18, l: 44 }, mobil: { w: 34, l: 66 }, pikap: { w: 36, l: 76 }, truk: { w: 44, l: 118 } };
 const STEP = 8, DMIN = -1000, DMAX = 17000;
 // belok di persimpangan: jalan dua arah selebar 444 (u -142..302). Belok kiri memutari pojok dalam kotak simpang
 // (R 142 di lajur tengah), belok kanan menyeberangi kotak (R 302). Busurnya pas di dalam kotak simpang.

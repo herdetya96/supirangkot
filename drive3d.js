@@ -690,6 +690,8 @@ function createImpl(canvas, S, spec, o) {
   const motorCols = h => hasAsset('motor') ? [A.CARC[(h + 3) % 8], A.SHIRT[h % 8], HELM[h % 8]] : [A.SHIRT[h % 8]];
   // angkot pemain
   const me = mk(hasAsset('angkot_' + spec.route) ? 'angkot_' + spec.route : 'angkot', o.hex);
+  me.rotation.order = 'YXZ';          // belok dulu, lalu angguk dan miring di sumbu badan sendiri
+  const body = { roll: 0, pitch: 0 };
   const brakeMat = new T.MeshBasicMaterial({ color: C('#5a1410').clone() }); mats.push(brakeMat);
   const revMat = new T.MeshBasicMaterial({ color: C('#3a3a34').clone() }); mats.push(revMat);
   if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); const r = new T.Mesh(new T.BoxGeometry(3.4, 5, 1), revMat); r.position.set(sx * 14, 21.5, 42.6); me.add(r); } }
@@ -786,8 +788,12 @@ function createImpl(canvas, S, spec, o) {
   function render(dt, mode) {
     const d = S.d, t = S.t, pc = Wd.at(d), dA = d - 600, dB = d + 2700;
     // pemain
-    const yaw = S.yaw + (S.skid ? Math.sign(S.skid) * 0.12 : 0);
-    put(me, d, S.x - 180, 0, -yaw); me.rotation.x = S.braking && Math.abs(S.v) > 40 ? 0.025 * Math.sign(S.v) : 0;
+    const yaw = S.yaw + (S.slip || 0);
+    // badan angkot: miring keluar saat menikung, hidung turun saat mengerem, sedikit naik saat menggas (dihaluskan)
+    const rollT = Math.max(-0.06, Math.min(0.06, (S.latA || 0) / 200 * 0.05));
+    const pitchT = S.braking && Math.abs(S.v) > 30 ? -0.03 * Math.sign(S.v) : S.gas && Math.abs(S.v) < S.vMax * 0.95 ? 0.012 : 0;
+    const bf = Math.min(1, dt * 6); body.roll += (rollT - body.roll) * bf; body.pitch += (pitchT - body.pitch) * bf;
+    put(me, d, S.x - 180, 0, -yaw); me.rotation.x = body.pitch; me.rotation.z = body.roll;
     brakeMat.color.copy(C(S.braking || Math.abs(S.v) < 5 ? '#ff3b2f' : '#5a1410'));
     revMat.color.copy(C(S.rev ? '#fffbe6' : '#3a3a34'));
     // kendaraan

@@ -11,9 +11,9 @@ const ACC = 170, BRAKE = 540, COAST = 75, LAT = 380, STOP_V = 30, CORNER_V = 235
 // bot (inp.tx): jalan membelokkan angkot sendiri; ngebut di persimpangan menumpuk 'selip' (kelebihan laju × detik),
 // lewat SLIDE_MAX = kebablasan.
 const SLIDE_MAX = 40;
-// pemain (inp.steer): K_MAX = lengkung tajam penuh (1/radius), STEER_RATE = laju putar setir per detik.
+// pemain (inp.steer): K_MAX = lengkung roda penuh (1/radius; roda berputar dari lurus ke penuh dalam 0,5 dtk).
 // A_LAT = batas cengkeraman: belok kiri lajur tengah (R 142) aman sampai ±168 (30 km/j), belok kanan (R 302) ±246.
-const K_MAX = 1 / 55, STEER_RATE = 3.5, A_LAT = 200;
+const K_MAX = 1 / 55, A_LAT = 200;
 // mundur: laju maksimum dan percepatan. YAW_MAX = sudut badan maksimum bot saat pindah lajur.
 const V_REV = 90, ACC_REV = 110, YAW_MAX = 0.2;
 const KIND = { motor: { w: 16, l: 34 }, mobil: { w: 34, l: 66 }, pikap: { w: 36, l: 76 }, truk: { w: 44, l: 118 } };
@@ -135,7 +135,7 @@ class Sim {
   constructor(spec) {
     this.spec = spec; this.r = mulberry(spec.seed || 1); this.world = buildWorld(spec.route);
     const Wd = this.world;
-    this.t = 0; this.d = 0; this.v = 0; this.x = LANES[1]; this.tx = LANES[1]; this.vx = 0; this.yaw = 0; this.rev = false; this.psi = 0; this.delta = 0; this.fwd = 1; this.under = false;
+    this.t = 0; this.d = 0; this.v = 0; this.x = LANES[1]; this.tx = LANES[1]; this.vx = 0; this.yaw = 0; this.rev = false; this.psi = 0; this.kapA = 0; this.yr = 0; this.latA = 0; this.slip = 0; this.refX = null; this.fwd = 1; this.under = false;
     this.vMax = spec.vMax || 340; this.brakeK = spec.wet ? 0.6 : 1;
     this.riders = []; this.fares = 0; this.boarded = 0;
     this.hits = 0; this.severe = 0; this.potholes = 0; this.tilang = 0; this.missed = 0; this.stolen = 0; this.merah = 0; this.skids = 0;
@@ -191,31 +191,51 @@ class Sim {
     const wob = S.wobble ? Math.sin(this.t * 1.7) * 0.25 * S.wobble : 0;
     this.fwd = 1;
     if (inp.steer != null) {
-      // SETIR BEBAS: setir mengubah arah hadap angkot (psi, relatif terhadap jalan). Jalan yang menikung memutar
-      // arah itu, jadi di tikungan pemain harus ikut membelokkan. Daya belok dibatasi cengkeraman ban:
-      // terlalu kencang = angkot tidak sanggup menikung dan melebar ke tepi (kebablasan). Dilepas, setir kembali
-      // lurus dan angkot pelan-pelan sejajar jalan lagi (hanya di jalan lurus; di tikungan bantuannya tidak cukup).
-      const raw = clamp(inp.steer, -1, 1) + wob;
-      this.delta += clamp(raw - this.delta, -STEER_RATE * dt, STEER_RATE * dt);
-      // makin kencang makin halus beloknya (setir tidak terlalu peka di jalan lurus)
-      let kap = this.delta * K_MAX * clamp(60 / Math.max(spd, 1), 0.2, 1);
-      if (Math.abs(raw) < 0.08 && !k) {
-        // dilepas di jalan lurus: angkot lurus lagi dan merapat pelan ke tengah lajur yang sedang dituju (tanpa memantul)
-        const ln = LANES.reduce((b, l) => Math.abs(l - (this.x + Math.sign(this.psi * this.v) * 32)) < Math.abs(b - (this.x + Math.sign(this.psi * this.v) * 32)) ? l : b, LANES[0]);
-        const cap = clamp(18 / Math.max(spd, 1), 0.12, 0.35), psiT = clamp((ln - this.x) * 2.5 / Math.max(spd, 60), -cap, cap) * Math.sign(this.v || 1);
-        kap = clamp((psiT - this.psi) * 4 / ((Math.sign(this.v) || 1) * Math.max(spd, 60)), -K_MAX * 0.5, K_MAX * 0.5);
-      } else if (Math.abs(raw) < 0.08) kap = 0;     // dilepas di persimpangan: angkot lurus terus (harus ditahan ke arah panah)
-      // BANTUAN BELOK di persimpangan: putar setir ke arah belokan (berapa pun), angkot mengikuti lintasan belok sendiri
-      // setelah sekali kebablasan di simpang, sisa belokan dibantu (hukumannya cukup sekali per simpang)
-      if (this.rescue != null && (this.d > this.rescue || !k)) this.rescue = null;
-      this.assist = !!k && (this.rescue != null || (Math.sign(raw) === -Math.sign(k) && Math.abs(raw) > 0.2));
-      if (this.assist) kap = -k * sf - this.psi * 2 / Math.max(spd, 60);
-      const kLim = spd > 1 ? A_LAT * (S.wet ? 0.81 : 1) / (spd * spd) : K_MAX;
-      this.under = Math.abs(kap) > kLim && spd > 100 && k !== 0;      // di jalan lurus batas belok tidak dihitung selip
-      kap = clamp(kap, -kLim, kLim);
-      if (spd > 1) this.psi = clamp(this.psi + this.v * (kap + k * sf * Math.cos(this.psi)) * dt, k ? -1.1 : -0.45, k ? 1.1 : 0.45);
+      // SETIR PEMAIN, model kendaraan sederhana tapi realistis:
+      //  1. perintah lengkung (cmd) dari tombol, atau dari "sopir bantu" (persimpangan / merapat ke lajur)
+      //  2. roda depan berputar dengan laju terbatas (kapA tidak bisa melompat), dibatasi cengkeraman ban
+      //  3. badan angkot menyusul dengan kelembaman (laju belok r tertinggal ±0,12 dtk)
+      // psi = arah hadap relatif terhadap jalan; jalan yang menikung ikut memutar psi.
+      const raw = clamp(inp.steer, -1, 1) + wob, sgnV = Math.sign(this.v) || 1, vv = Math.max(spd, 50);
+      // sopir melihat ±0,35 dtk ke depan, jadi belokan dimulai sedikit sebelum mulut simpang dan keluar dengan mulus
+      const look = clamp(spd * 0.35, 30, 130), kP = this.world.at(this.d + look * sgnV).k, kT = k || kP;
+      // jaga lajur: lengkung jalan + koreksi arah hadap + koreksi jarak ke tengah lajur (teredam, tidak memantul)
+      const follow = (xRef, kRoad) => {
+        const kEff = kRoad ? kRoad / Math.max(0.2, 1 + kRoad * (xRef - 180)) : 0;
+        return -kEff - this.psi * 2.4 / (sgnV * vv) - (this.x - xRef) * 3 / (vv * vv);
+      };
+      if (this.rescue != null && (this.d > this.rescue || !kT)) this.rescue = null;
+      // BANTUAN BELOK: tahan tombol ke arah belokan (atau sesudah sekali kebablasan), angkot dibelokkan seperti sopir
+      this.assist = !!kT && (this.rescue != null || (Math.sign(raw) === -Math.sign(kT) && Math.abs(raw) > 0.2));
+      let cmd;
+      if (this.assist) {
+        if (this.refX == null) this.refX = LANES.reduce((b, l) => Math.abs(l - this.x) < Math.abs(b - this.x) ? l : b, LANES[0]);
+        cmd = follow(this.refX, (k + kP) / 2);
+      } else {
+        this.refX = null;
+        if (Math.abs(raw) >= 0.08) cmd = raw * K_MAX * clamp(60 / vv, 0.2, 1);
+        else if (kT) cmd = 0;                       // dilepas di persimpangan: angkot lurus terus (harus ditahan ke arah panah)
+        else {
+          // dilepas di jalan lurus: lurus lagi dan merapat ke tengah lajur yang sedang dituju
+          const aim = this.x + Math.sign(this.psi * this.v) * 32, ln = LANES.reduce((b, l) => Math.abs(l - aim) < Math.abs(b - aim) ? l : b, LANES[0]);
+          cmd = clamp(follow(ln, 0), -K_MAX * 0.5, K_MAX * 0.5);
+        }
+      }
+      // roda depan berputar bertahap: dari lurus ke penuh ±0,5 dtk
+      // (sopir bantu di persimpangan memutar roda lebih sigap: penuh dalam ±0,2 dtk)
+      const kr = K_MAX * (this.assist ? 5 : 2) * dt;
+      this.kapA += clamp(cmd - this.kapA, -kr, kr);
+      const kLim = spd > 1 ? A_LAT * (S.wet ? 0.81 : 1) / (spd * spd) : K_MAX, kap = clamp(this.kapA, -kLim, kLim);
+      this.under = Math.abs(this.kapA) > kLim * 1.02 && spd > 100 && !!kT;      // di jalan lurus batas belok tidak dihitung selip
+      // kelembaman badan: laju belok menyusul lengkung roda
+      this.yr += (this.v * kap - this.yr) * Math.min(1, dt / 0.12);
+      // di jalan lurus sudut hadap dibatasi; makin kencang makin kecil (pindah lajur di laju tinggi pakai sudut landai)
+      const pm = k ? 1.1 : clamp(0.45 * 110 / vv, 0.2, 0.45);
+      if (spd > 1) this.psi = clamp(this.psi + (this.yr + k * sf * this.v * Math.cos(this.psi)) * dt, -pm, pm);
+      else this.yr = 0;
       this.x += this.v * Math.sin(this.psi) * dt; this.fwd = Math.cos(this.psi);
-      this.steer = this.delta; this.tx = this.x;
+      this.latA = this.v * this.yr;                 // percepatan ke samping, untuk badan miring di 3D
+      this.steer = raw; this.tx = this.x;
       this.skid = this.under ? -Math.sign(kap) * 60 : 0;
     } else {
       if (inp.tx != null) this.tx = inp.tx;
@@ -231,12 +251,12 @@ class Sim {
     }
     if (bebas) {
       if (this.under) this.say('Ban berdecit! Kurangi gas!', 'bad');
-      // setir bebas: menabrak tepi jalan. Pelan = cuma mentok (menepi ke trotoar boleh); kencang = kebablasan.
-      const lv = this.v * Math.sin(this.psi), into = Math.abs(lv) > 12 && ((this.x <= xmin && lv < 0) || (this.x >= xmax && lv > 0));
+      // menabrak tepi jalan: menyentuh pelan (geser ke samping < 45) = cuma mentok dan sejajar; benturan keras = kebablasan.
+      const lv = this.v * Math.sin(this.psi), into = Math.abs(lv) > 45 && ((this.x <= xmin && lv < 0) || (this.x >= xmax && lv > 0));
       if (into) {
         if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di persimpangan!' : 'Nyenggol pinggir jalan!', 'bad'); }
         this.psi *= 0.3;
-        if (k) { const j = this.world.junctions.find(j => this.d >= j.d0 && this.d <= j.d1); if (j) { this.rescue = j.d1; this.psi = 0; } }
+        if (k) { const j = this.world.junctions.find(j => this.d >= j.d0 && this.d <= j.d1); if (j) { this.rescue = j.d1; this.psi = 0; this.yr = 0; this.kapA = 0; } }
       }
       if ((this.x <= xmin && this.v * Math.sin(this.psi) < 0) || (this.x >= xmax && this.v * Math.sin(this.psi) > 0)) this.psi *= 0.5;
       this.x = clamp(this.x, xmin, xmax);
@@ -247,6 +267,8 @@ class Sim {
       const lv = dt > 0 ? (this.x - x0) / dt : 0, yt = spd < 2 ? this.yaw : clamp(Math.atan(lv / Math.max(spd, 110)), -YAW_MAX, YAW_MAX) * Math.sign(this.v || 1);
       this.yaw += (yt - this.yaw) * Math.min(1, dt * 7);
     }
+    // buntut angkot mengayun waktu selip (hanya tampilan), dihaluskan supaya tidak tersentak
+    this.slip += ((this.skid ? Math.sign(this.skid) * 0.12 : 0) - this.slip) * Math.min(1, dt * 5);
     const prev = this.d; this.d = Math.max(-200, this.d + this.v * this.fwd * sf * dt);
     // lampu merah dan palang kereta
     for (const L of this.lights) {
@@ -761,7 +783,7 @@ function draw(c, S, H, o) {
     });
   }
   // angkot pemain
-  const yaw = S.yaw + (S.skid ? Math.sign(S.skid) * 0.12 : 0);
+  const yaw = S.yaw + (S.slip || 0);
   place(d, S.x - 180, () => { c.rotate(yaw); angkot(c, o.hex, { no: o.route, brake: S.braking || Math.abs(S.v) < 5, rev: S.rev, sein: S.x < CURB_X, t }); });
   c.restore();
   // suasana: hujan, sore makin gelap, lampu depan
@@ -835,6 +857,7 @@ function mount(host, spec, opts, done) {
     <div class="ny-kanvas"><canvas class="ny-hud"></canvas>${modes.length > 1 ? `<button class="ny-kam" data-ny="kam" aria-label="Ganti kamera">🎥 <span>${CAMS[mode]}</span></button>` : ''}
       <div class="ny-lapis" data-ny="intro"><div class="ny-kartu"><span class="eyebrow">Rit ${esc(opts.shiftName)} · Trayek ${esc(spec.route)}</span><h2>${esc(stops[0])} → ${esc(stops[stops.length - 1])}</h2>
         <p class="ny-rute">${stops.map(esc).join(' · ')}</p>
+        <p class="ny-rit"><b>Rit</b> = sekali jalan narik penumpang di trayek ini, dari ${esc(stops[0])} ke arah ${esc(stops[stops.length - 1])}. Sehari ada tiga rit: pagi, siang, sore. Satu rit 60 detik.</p>
         <ul><li>Tahan <b>▲ MAJU</b> untuk jalan. Lepas, angkot melambat sendiri.</li>
         <li>Tahan <b>▼ MUNDUR</b> untuk mengerem. Tetap ditahan setelah berhenti, angkot jalan mundur (misalnya menjemput penumpang yang kelewatan).</li>
         <li>Tahan <b>◀ ▶</b> untuk belok. Lepas, angkot lurus lagi dan merapat ke tengah lajur.</li>
@@ -868,9 +891,9 @@ function mount(host, spec, opts, done) {
   function frame(now) {
     // HP lambat: fisika tetap memakai langkah kecil supaya waktu rit sama dengan waktu nyata
     const dt = Math.min(0.5, (now - last) / 1000 || 0); last = now;
-    // belok: ◀ ▶ ditahan = setir berputar pelan-pelan (bukan langsung penuh), dilepas = kembali lebih cepat
+    // belok: ◀ ▶ ditahan = setir berputar bertahap (±0,25 dtk sampai penuh), dilepas = kembali sedikit lebih cepat
     const want = ((keys.r || btn.r) ? 1 : 0) - ((keys.l || btn.l) ? 1 : 0);
-    const rate = want !== 0 && Math.sign(want) === Math.sign(steerVal || want) && Math.abs(want) > Math.abs(steerVal) ? 2.4 : 5;
+    const rate = want !== 0 && Math.sign(want) === Math.sign(steerVal || want) && Math.abs(want) > Math.abs(steerVal) ? 4 : 6;
     steerVal += clamp(want - steerVal, -rate * dt, rate * dt); inp.steer = steerVal;
     // ▲ MAJU = gas (mengerem dulu kalau sedang mundur); ▼ MUNDUR = rem, lalu mundur kalau tetap ditahan setelah berhenti
     const up = keys.g || btn.up, dn = keys.b || btn.dn;

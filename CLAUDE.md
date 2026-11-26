@@ -76,16 +76,22 @@ Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, 
 - ▲ MAJU = gas (kalau sedang mundur, mengerem dulu). Dilepas, angkot melambat sendiri (`COAST` 75/dtk²).
 - ▼ MUNDUR = rem; tetap ditahan 0,45 dtk setelah berhenti, angkot jalan mundur sampai `V_REV` 90 (`inp.mundur`).
   Mundur menabrak kendaraan di belakang = serempet. Lampu mundur putih di 2D dan 3D.
-- ◀ ▶ = setir (`inp.steer`). Di `mount` nilai setir naik pelan (2,4/dtk) dan turun cepat (5/dtk). Setir mengubah arah hadap
-  angkot `S.psi` relatif terhadap jalan (lengkung maks `K_MAX` 1/55, makin kencang makin halus: × 60/laju, min 0,2).
-  Di jalan lurus sudut dibatasi ±0,45 rad, dan saat dilepas angkot lurus lagi lalu merapat ke tengah lajur yang sedang
-  dituju (target sudut = jarak ke lajur × 2,5/laju, peredaman cukup supaya tidak memantul). Tahan 0,15 dtk = geser kecil
-  lalu kembali; ±0,35 dtk atau lebih = pindah satu lajur.
-- Persimpangan: tahan ◀ atau ▶ ke arah panah (>0,2) = bantuan belok (angkot mengikuti lintasan belok). Dilepas atau tidak
+- ◀ ▶ = setir (`inp.steer`). Di `mount` nilai tombol naik ±0,25 dtk sampai penuh dan turun sedikit lebih cepat. Fisika
+  (model kendaraan sederhana): perintah lengkung `cmd` → roda depan berputar bertahap (`S.kapA`, penuh dalam 0,5 dtk; 0,2 dtk
+  saat dibantu) → dibatasi cengkeraman `A_LAT` → badan menyusul dengan kelembaman (`S.yr`, ±0,12 dtk) → arah hadap `S.psi`
+  relatif terhadap jalan. Tombol: `cmd` = tombol × `K_MAX` (1/55) × 60/laju (min 0,2). Di jalan lurus sudut dibatasi
+  0,45 rad di laju rendah sampai 0,2 rad di laju tinggi. Dilepas di jalan lurus: "sopir bantu" (`follow`) meluruskan dan
+  merapatkan ke tengah lajur yang sedang dituju (teredam, tidak memantul). Tahan 0,15 dtk = geser kecil, lebih lama = pindah
+  lajur. Badan 3D miring keluar saat menikung (`S.latA`), menunduk saat mengerem; buntut mengayun saat selip (`S.slip`).
+  Menyentuh tepi dengan geser ke samping < 45 = hanya mentok; lebih keras = kebablasan/nyenggol.
+- Persimpangan: tahan ◀ atau ▶ ke arah panah (>0,2) = bantuan belok: sopir bantu melihat ±0,35 dtk ke depan, jadi angkot
+  mulai berbelok sedikit sebelum mulut simpang dan tetap di lajurnya (meleset ±16 unit kalau baru ditekan di mulut simpang,
+  ±8 kalau sedikit lebih awal). Dilepas atau tidak
   ditekan di dalam simpang = angkot lurus terus, menabrak tepi = kebablasan sekali, sisa belokan dibantu.
   Daya belok dibatasi cengkeraman `A_LAT`, jadi ngebut = melebar ke tepi = kebablasan.
 - Keyboard: ↑/W maju, ↓/S mundur, ←→/A/D belok, spasi rem, H klakson, C kamera.
-Bot jempol tombol (reaksi 0,25 dtk, pelan di persimpangan): 11,1 penumpang, Rp 77 rb per rit. Bot drivebot tetap memakai
+Bot jempol tombol (reaksi 0,25 dtk, pelan di persimpangan, mulai menepi 900 unit sebelum penumpang): 12,3 penumpang,
+Rp 88 rb per rit (kalau baru menepi 500 unit sebelumnya: 9,7 penumpang, Rp 65 rb). Bot drivebot tetap memakai
 target lajur `inp.tx` (jalan membelokkan sendiri), jadi angka keseimbangan tidak berubah.
 Angkot diam tidak bisa bergeser. Kamera atas menoleh ke landmark yang sedang dilewati. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
 `localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Semua kamera ikut angkot, bukan jalan: berpusat di angkot dan

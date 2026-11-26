@@ -50,6 +50,11 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
     nyetir: `.glb` ±15 MB per tokoh dan rambutnya tidak ikut. Kalau pengguna mau tokoh ini muncul di jalan, perlu versi
     ringan (dikurangi ke ±10 ribu segitiga, rambut dijadikan mesh) lewat Blender.
 
+17. "Pake model itu tapi buat lebih rendah resolusinya" + "angkotnya juga udah aku upload". Dibuat versi ringan:
+    orang di jalan = empat tokoh (±5.300 segitiga, rambut jadi volume padat), angkot = model detail (±17 ribu segitiga,
+    varian 05/09/12). Skrip: `tools/blender/karakter/ringan.py`, `tools/blender/angkot/ringan.py`. Belum diukur fps di HP;
+    bundel model naik dari 2,9 MB ke 4,8 MB. Pengendara motor masih model lama.
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 

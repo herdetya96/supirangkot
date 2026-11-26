@@ -77,9 +77,20 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   (tidak ikut ke GLB). Catatan lengkap dan kekurangannya di `art/karakter/README.md`.
   Dipakai game hanya sebagai potret adegan cerita: `assets/img/potret-<id>.webp` (440×550, ±10 KB) = `render/<id>_wajah.jpg`
   diperkecil. `ui.js` (`POTRET`) menampilkannya di atas balon dialog; tokoh lain tetap lingkaran huruf.
-  `.glb`-nya (±15 MB, tanpa rambut) terlalu berat untuk dunia 3D di HP.
+  Di dunia 3D dipakai versi ringannya: `tools/blender/karakter/ringan.py` → `assets/models/orang_<id>.glb` (±5.300 segitiga,
+  ±120 KB). Badan (dengan Mask), baju, celana di-decimate; helai rambut dan kumis diubah jadi volume padat lewat geometry
+  nodes (Curve to Points → Points to Volume → Volume to Mesh), alis dan bulu mata dibuang; diputar menghadap +Y, telapak di z = 0.
+  Mesh `kulit`, `baju`, `celana`, `rambut` putih × warna per orang, `lain` (mata, sandal, handuk, peci, kancing) warna tetap.
+  `drive3d.js` (`ORANG`, `pv`) membagi pejalan dan penumpang ke empat bentuk badan ini, satu InstancedMesh per bagian per bentuk;
+  warna rambut dari `HAIR`. Kalau gagal dimuat, kembali ke `orang.glb` lama.
 - Angkot detail tinggi (`art/angkot/`, ±134 ribu segitiga, 196 mesh): aset seni, bukan aset game, dibuat `npm run angkot-detail`
   (`tools/blender/angkot/build.py`, ±1 menit, butuh `pip install bpy`). Sama seperti karakter: jangan taruh `.glb`-nya di `assets/models/`.
+  `build.py` menerima `TRAYEK=05|09|12` (nomor, tulisan rute, pelat). Angkot game sekarang versi ringannya:
+  `tools/blender/angkot/ringan.py` menjalankan `build.py` per trayek, decimate (134 rb → ±17 rb segitiga; roda 300, tulisan ×0,14,
+  lis dan karet ×0,4, badan ×0,6; tulisan koperasi, pelat, dan strip kaca dibuang), warna material → warna per sudut (cat hijau
+  → penanda CAT), diputar menghadap +Y, diskalakan (1,10 lebar, 0,845 panjang, 0,95 tinggi) supaya pas kotak tabrakan 3,4 × 1,76 m.
+  Lampu rem = mesh `rem`, lampu mundur = mesh `mundur` (diwarnai `brakeMat`/`revMat` di `drive3d.js`). Hasilnya `angkot.glb`
+  dan `angkot_05/09/12.glb`; fungsi `angkot()` lama di `build_assets.py` tidak dipanggil lagi. Bundel `assets/models.js` ±4,8 MB.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 

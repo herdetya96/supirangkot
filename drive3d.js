@@ -21,7 +21,8 @@ const rotOf = a => -a - Math.PI / 2;            // arah jalan → rotation.y ben
 
 /* ---------- aset dari Blender (tools/blender/build_assets.py → assets/models.js lewat tools/pack_models.js) ---------- */
 const M2U = 25;                                   // 1 meter Blender = 25 unit game
-const ASSET_NAMES = ['angkot', 'angkot_05', 'angkot_09', 'angkot_12', 'mobil', 'pikap', 'truk', 'motor', 'motor_parkir', 'kereta', 'orang', 'pohon_mangga', 'pohon_kelapa',
+const ORANG = ['orang_ujang', 'orang_sobari', 'orang_rina', 'orang_dimas'];   // dari karakter detail tinggi (tools/blender/karakter/ringan.py)
+const ASSET_NAMES = ['angkot', 'angkot_05', 'angkot_09', 'angkot_12', 'mobil', 'pikap', 'truk', 'motor', 'motor_parkir', 'kereta', 'orang', ...ORANG, 'pohon_mangga', 'pohon_kelapa',
   'lampu_jalan', 'lampu_merah', 'gerobak', 'ruko', 'rumah', 'warung', 'tiang', 'tiang_trafo', 'rumah_jauh', 'pohon_jauh', 'palang',
   'lm_terminal', 'lm_pasar', 'lm_masjid', 'lm_sekolah', 'lm_spbu', 'lm_alun', 'lm_kampus', 'lm_stasiun', 'lm_griya'];
 const MARK = { cat: [1, 0, 1], kedua: [0, 1, 1], ketiga: [0.5, 0, 1] };
@@ -161,6 +162,7 @@ function mat(o) {
 const HELM = ['#e33b2f', '#ffcc00', '#f2f2f2', '#3399ff', '#1b1b1b', '#33aa55', '#ff8800', '#cc33cc'];
 const RAMBUT = ['#1b1714', '#2a221c', '#1b1714', '#f2f2f2', '#d9a1b8', '#3e6fb1', '#1b1714', '#6b3b2a'];
 const CELANA = ['#2f3d4a', '#4a4a4a', '#3b5b7a', '#6b5a45', '#22262a'];
+const HAIR = ['#1b1714', '#2a221c', '#1b1714', '#3a2e26', '#8a8580', '#1b1714', '#d8d6d0', '#2a221c'];   // rambut asli (model tokoh)
 
 /* ---------- pembuat geometri berwarna per titik ---------- */
 class GB {
@@ -710,8 +712,12 @@ function createImpl(canvas, S, spec, o) {
   for (let i = 0; i < 6; i++) { const m = new T.Mesh(vehicleGeo('kereta', i === 0 ? '#e07b39' : '#3e6fb1'), vmat); m.position.set(-575 + 96 + i * 192, 0, 0); m.rotation.y = Math.PI / 2; train.add(m); }
   // orang: badan dan kepala (instanced, diperbarui tiap frame)
   const NP = 260;
-  const PARTS = hasAsset('orang') ? ['celana', 'baju', 'kulit', 'rambut'].map(k => [k, assetGeo('orang', k)]) : [['baju', U.body], ['kulit', U.head]];
-  const pm = PARTS.map(([k, g]) => { const m = new T.InstancedMesh(g, mat({ vc: hasAsset('orang'), obj: true }), NP); m.frustumCulled = false; m.castShadow = true; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m }; });
+  // empat bentuk badan (tokoh cerita versi ringan), masing-masing satu InstancedMesh per bagian; warna per orang
+  const VAR = ORANG.every(hasAsset) ? ORANG : hasAsset('orang') ? ['orang'] : [null];
+  const pv = VAR.map(name => {
+    const PARTS = name ? ['celana', 'baju', 'kulit', 'rambut', 'lain'].filter(k => AS.geo[name][k]).map(k => [k, assetGeo(name, k)]) : [['baju', U.body], ['kulit', U.head]];
+    return { n: 0, pm: PARTS.map(([k, g]) => { const m = new T.InstancedMesh(g, mat({ vc: !!name, obj: true }), NP); m.frustumCulled = false; m.castShadow = true; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m }; }) };
+  });
   const dummy = new T.Object3D();
   // penanda penumpang dan kotak berhenti
   const markMat = mat({ color: '#ffd400' }); markMat.emissive = C('#806a00').clone(); mats.push(markMat);
@@ -811,12 +817,13 @@ function createImpl(canvas, S, spec, o) {
     }
     for (; xi < xcars.length; xi++) xcars[xi].visible = false;
     // orang
-    let n = 0, mi = 0;
-    const person = (d2, u, y, ry, shirt, skin, h) => {
-      if (n >= NP) return; const q = P(d2, u, y); dummy.position.set(q[0], q[1], q[2]); dummy.rotation.set(0, ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
-      const col = { baju: shirt, kulit: skin, celana: CELANA[(h || 0) % CELANA.length], rambut: RAMBUT[(h || 0) % RAMBUT.length] };
-      for (const p of pm) { p.m.setMatrixAt(n, dummy.matrix); p.m.setColorAt(n, C(col[p.k])); }
-      n++;
+    let mi = 0; for (const v of pv) v.n = 0;
+    const person = (d2, u, y, ry, shirt, skin, h, vi) => {
+      const v = pv[(vi != null ? vi : ((h || 0) >>> 2)) % pv.length]; if (v.n >= NP) return;
+      const q = P(d2, u, y); dummy.position.set(q[0], q[1], q[2]); dummy.rotation.set(0, ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+      const col = { baju: shirt, kulit: skin, celana: CELANA[(h || 0) % CELANA.length], rambut: VAR[0] === ORANG[0] ? HAIR[(h || 0) % HAIR.length] : RAMBUT[(h || 0) % RAMBUT.length], lain: '#ffffff' };
+      for (const p of v.pm) { p.m.setMatrixAt(v.n, dummy.matrix); p.m.setColorAt(v.n, C(col[p.k])); }
+      v.n++;
     };
     for (const g of S.groups) {
       if (g.n <= 0 || g.d < dA || g.d > d + 1600) { continue; }
@@ -830,8 +837,8 @@ function createImpl(canvas, S, spec, o) {
     }
     for (; mi < marks.length; mi++) { marks[mi].visible = false; zones[mi].visible = false; }
     for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB || Wd.inJ(pd, 40)) continue; person(pd, pr.u, 4 + Math.abs(Math.sin(t * 8 + pr.h)) * 2, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4], pr.h >>> 6); }
-    for (const pl of S.police) if (pl.d > dA && pl.d < dB) person(pl.d, -126, 4, rotOf(Wd.at(pl.d).a) - Math.PI / 2, '#5b4a2e', '#8d5a3b', 0);
-    for (const p of pm) { p.m.count = n; p.m.instanceMatrix.needsUpdate = true; if (p.m.instanceColor) p.m.instanceColor.needsUpdate = true; }
+    for (const pl of S.police) if (pl.d > dA && pl.d < dB) person(pl.d, -126, 4, rotOf(Wd.at(pl.d).a) - Math.PI / 2, '#5b4a2e', '#8d5a3b', 0, 0);
+    for (const v of pv) for (const p of v.pm) { p.m.count = v.n; p.m.instanceMatrix.needsUpdate = true; if (p.m.instanceColor) p.m.instanceColor.needsUpdate = true; }
     // lampu dan palang
     for (const tl of tls) {
       const stt = S.lightState(tl.L);

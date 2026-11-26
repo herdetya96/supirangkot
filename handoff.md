@@ -64,6 +64,9 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
     narik keluar rumah, ke dekat angkot, jalankan angkotnya." Dibuat `rumah3d.js` (lihat CLAUDE.md). Belum ada: hujan di
     adegan rumah, sopir lain datang mengambil angkotnya, interior rumah.
 
+20. "Rumah masih sangat jelek, buat 3D di Blender". Dibuat rumah kampung detail dengan garasi samping (`art/rumah`,
+    `tools/blender/rumah/`), dipakai di adegan rumah; angkot sekarang keluar gerbang dan mundur masuk garasi.
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 

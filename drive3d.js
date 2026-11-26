@@ -23,7 +23,7 @@ const rotOf = a => -a - Math.PI / 2;            // arah jalan → rotation.y ben
 const M2U = 25;                                   // 1 meter Blender = 25 unit game
 const ORANG = ['orang_ujang', 'orang_sobari', 'orang_rina', 'orang_dimas'];   // dari karakter detail tinggi (tools/blender/karakter/ringan.py)
 const ASSET_NAMES = ['angkot', 'angkot_05', 'angkot_09', 'angkot_12', 'mobil', 'pikap', 'truk', 'motor', 'motor_parkir', 'kereta', 'orang', ...ORANG, 'pohon_mangga', 'pohon_kelapa',
-  'lampu_jalan', 'lampu_merah', 'gerobak', 'ruko', 'rumah', 'warung', 'tiang', 'tiang_trafo', 'rumah_jauh', 'pohon_jauh', 'palang',
+  'lampu_jalan', 'lampu_merah', 'gerobak', 'ruko', 'rumah', 'rumah_sopir', 'warung', 'tiang', 'tiang_trafo', 'rumah_jauh', 'pohon_jauh', 'palang',
   'lm_terminal', 'lm_pasar', 'lm_masjid', 'lm_sekolah', 'lm_spbu', 'lm_alun', 'lm_kampus', 'lm_stasiun', 'lm_griya'];
 const MARK = { cat: [1, 0, 1], kedua: [0, 1, 1], ketiga: [0.5, 0, 1] };
 // jenis material: urutan = lapisan assets/img/detail.webp = KELAS di build_assets.py.

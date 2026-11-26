@@ -38,12 +38,16 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   `lubang`, `tilang` (peluit), `mogok`. Getar (`navigator.vibrate`, tidak ada di iPhone) untuk tabrakan, selip, lubang, tilang.
   Hidup/mati lewat tombol 🔊 di kiri atas, `localStorage` kunci `narik-suara`. AudioContext dibuat saat tombol Gas! ditekan
   dan dihentikan saat tab disembunyikan.
-- `rumah3d.js` = adegan rumah sopir (`window.NARIK_RUMAH`), layar utama pagi dan malam dalam 3D. Halaman rumah (aset `rumah`
-  menghadap kamera, ruko, warung, pohon, tiang, kampung jauh), angkot armada parkir menghadap kanan (dua di halaman, sisanya
-  di pinggir jalan), Dimas di teras, tokoh pemain (bentuk `orang_dimas`, baju hijau) yang berjalan dengan mengetuk tanah
-  atau angkot (rintangan rumah/angkot dihindari dengan menyusuri sisi). Pagi: tombol "Jalan ke angkot" → setelah dekat pintu
-  angkot jadi "Naik dan berangkat narik" (`ke-angkot` di `ui.js`) → tokoh naik, angkot melaju ke kanan, Dimas melambai, tirai
-  gelap, lalu layar rit seperti biasa. Malam: angkot pulang dari kiri dan parkir (lampu depan), tokoh turun dan jalan ke teras,
+- `rumah3d.js` = adegan rumah sopir (`window.NARIK_RUMAH`), layar utama pagi dan malam dalam 3D. Rumah = model Blender
+  `rumah_sopir` (`art/rumah`, `tools/blender/rumah/build.py` lalu `ringan.py`: rumah kampung dengan teras, garasi samping
+  berkanopi, pagar, gerbang geser; titik pintu/parkir/lampu dari custom property `titik`). Sekitarnya ruko, rumah, warung,
+  pohon, tiang, jalan gang, kampung jauh. Si Ijo parkir di garasi menghadap jalan (kanopi `kanopi` tembus pandang supaya
+  terlihat dari atas), angkot armada lain di tepi jalan. Dimas di teras, tokoh pemain (bentuk `orang_dimas`, baju hijau)
+  berjalan dengan mengetuk tanah atau angkot (rintangan dihindari dengan menyusuri sisi, lantai teras lebih tinggi).
+  Pagi: tombol "Jalan ke angkot" → setelah dekat pintu angkot (sisi rumah) jadi "Naik dan berangkat narik" (`ke-angkot` di
+  `ui.js`) → tokoh naik, angkot maju keluar gerbang dan belok kanan (`J_BERANGKAT`), Dimas melambai, tirai gelap, lalu layar
+  rit seperti biasa. Malam: angkot datang dari kiri (lampu depan), berhenti melewati gerbang, lalu mundur berbelok masuk garasi
+  (`J_DATANG`, `J_MUNDUR`), tokoh turun dan jalan ke teras,
   buku setoran di panel bawah (kamera digeser naik), "Masuk rumah, istirahat" → tokoh masuk pintu → tirai → pagi berikutnya.
   Kalau pemain tidak menyetir sendiri, tokoh tidak ikut naik. Menu pagi jadi baris tombol (Armada, Kabar & target, Sopir, Beli,
   Bayar utang, Berkas sidang, Trayek, Cara main), kartu angkot dan kabar pindah ke lembar `armada`/`kabar`. Renderer,

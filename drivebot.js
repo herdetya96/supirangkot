@@ -32,7 +32,9 @@ function policy(S, p) {
   const L = p.nekat ? null : S.nextLight(S.d + DR.PL / 2);
   if (L) { const gap = L.d - 70 - (S.d + DR.PL / 2), st = S.lightState(L); if (st !== 'hijau' && gap > -2 && gap < stopDist + 25 && !(st === 'kuning' && gap < 30 && p.careful === false)) inp.brake = true; }
   if (p.careful) { for (let a = 40; a < 420; a += 40) if (S.world.at(S.d + a).k && S.v > DR.CORNER_V - 15) inp.brake = true; }
+  inp.gas = 1;
   if (p.careful && S.police.some(q => !q.done && q.d - S.d < 650) && S.v > 0.78 * S.vMax) inp.brake = true;
+  if (inp.brake) inp.gas = 0;
   return inp;
 }
 function play(spec, p) { const S = new DR.Sim(spec); while (!S.over) S.step(1 / 30, policy(S, p)); return S.result(); }

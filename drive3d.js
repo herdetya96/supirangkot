@@ -17,6 +17,52 @@ function available() { return !!root.THREE && !!root.NARIK_DRIVE && glOK(); }
 function C(hex) { return COLS[hex] || (COLS[hex] = new root.THREE.Color(hex)); }
 const rotOf = a => -a - Math.PI / 2;            // arah jalan → rotation.y benda yang menghadap -Z
 
+/* ---------- aset dari Blender (tools/blender/build_assets.py → assets/models/*.glb) ---------- */
+const M2U = 25;                                   // 1 meter Blender = 25 unit game
+const ASSET_NAMES = ['angkot', 'mobil', 'pikap', 'truk', 'motor', 'motor_parkir', 'kereta', 'orang', 'pohon_mangga', 'pohon_kelapa',
+  'lampu_jalan', 'lampu_merah', 'gerobak', 'ruko', 'rumah', 'warung', 'tiang', 'tiang_trafo'];
+const MARK = { cat: [1, 0, 1], kedua: [0, 1, 1], ketiga: [0.5, 0, 1] };
+const AS = { state: 'idle', geo: {}, promise: null, base: 'assets/models/' };
+function loadAssets() {
+  if (AS.promise) return AS.promise;
+  const T = root.THREE;
+  if (!T || !T.GLTFLoader) { AS.state = 'gagal'; return (AS.promise = Promise.resolve(false)); }
+  AS.state = 'memuat';
+  const loader = new T.GLTFLoader();
+  const one = n => new Promise(res => loader.load(AS.base + n + '.glb', g => { try { AS.geo[n] = extract(g); res(true); } catch (e) { res(false); } }, undefined, () => res(false)));
+  AS.promise = Promise.all(ASSET_NAMES.map(one)).then(r => { AS.state = r.every(Boolean) ? 'siap' : 'gagal'; return AS.state === 'siap'; });
+  return AS.promise;
+}
+function extract(gltf) {
+  const T = root.THREE, out = {};
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse(ob => {
+    if (!ob.isMesh) return;
+    let g = ob.geometry.clone(); g.applyMatrix4(ob.matrixWorld); if (g.index) g = g.toNonIndexed(); g.scale(M2U, M2U, M2U);
+    const c = g.getAttribute('color'), n = g.getAttribute('position').count, col = new Float32Array(n * 3);
+    // r128: getX() memberi angka mentah, jadi warna uint8/uint16 ternormalisasi dibagi manual
+    const div = c && c.normalized ? (c.array instanceof Uint16Array ? 65535 : c.array instanceof Uint8Array ? 255 : 1) : 1;
+    for (let i = 0; i < n; i++) { col[i * 3] = c ? c.getX(i) / div : 1; col[i * 3 + 1] = c ? c.getY(i) / div : 1; col[i * 3 + 2] = c ? c.getZ(i) / div : 1; }
+    g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.computeBoundingSphere();
+    out[ob.name] = g;
+  });
+  return out;
+}
+const hasAsset = n => AS.state === 'siap' && !!AS.geo[n];
+function assetGeo(name, part, cols) {
+  // salin geometri aset dan ganti warna penanda (cat/kedua/ketiga) dengan warna yang diminta
+  part = part || 'main';
+  const key = 'A:' + name + ':' + part + ':' + JSON.stringify(cols || {}); if (GEO[key]) return GEO[key];
+  const src = AS.geo[name][part]; if (!cols) return (GEO[key] = src);
+  const g = src.clone(), a = g.getAttribute('color').array;
+  const rep = Object.entries(cols).map(([k, hex]) => [MARK[k], C(hex)]);
+  for (let i = 0; i < a.length; i += 3) for (const [m, col] of rep) if (Math.abs(a[i] - m[0]) < 0.02 && Math.abs(a[i + 1] - m[1]) < 0.02 && Math.abs(a[i + 2] - m[2]) < 0.02) { a[i] = col.r; a[i + 1] = col.g; a[i + 2] = col.b; break; }
+  return (GEO[key] = g);
+}
+const HELM = ['#e33b2f', '#ffcc00', '#f2f2f2', '#3399ff', '#1b1b1b', '#33aa55', '#ff8800', '#cc33cc'];
+const RAMBUT = ['#1b1714', '#2a221c', '#1b1714', '#f2f2f2', '#d9a1b8', '#3e6fb1', '#1b1714', '#6b3b2a'];
+const CELANA = ['#2f3d4a', '#4a4a4a', '#3b5b7a', '#6b5a45', '#22262a'];
+
 /* ---------- pembuat geometri berwarna per titik ---------- */
 class GB {
   constructor() { this.p = []; this.c = []; }
@@ -49,7 +95,8 @@ class GB {
 /* ---------- model kendaraan (sekali per jenis dan warna) ---------- */
 const DARK = '#1d2a33', TIRE = '#151515';
 function wheels(b, w, l, r) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(sx * w / 2 - 3, sx * w / 2 + 3, 0, r * 2, sz * (l / 2 - r - 4) - r, sz * (l / 2 - r - 4) + r, TIRE); }
-function vehicleGeo(kind, col) {
+function vehicleGeo(kind, col, col2, col3) {
+  if (hasAsset(kind)) return assetGeo(kind, 'main', kind === 'motor' ? { cat: col, kedua: col2 || '#3e7cb1', ketiga: col3 || '#e33b2f' } : { cat: col });
   const key = kind + col; if (GEO[key]) return GEO[key];
   const b = new GB(), light = '#fff6c8', tail = '#8a1c14';
   if (kind === 'angkot') {
@@ -206,7 +253,12 @@ function buildStatic(Wd) {
   }
   const walls = [], roofs = [], trunks = [], leaves = [], boxes = [], F = new GB();
   const WALLS = ['#e8dfc8', '#d9cdb0', '#efe6d2', '#cfd5c8', '#e6d3b8'];
-  const tree = (x, z, r, h, y0) => { trunks.push({ x, z, y: y0 || 0, sx: 4, sy: r * 1.6, sz: 4, col: '#6b4f33' }); leaves.push({ x, z, y: (y0 || 0) + r * 1.9, sx: r * 1.25, sy: r * 1.15, sz: r * 1.25, col: ['#4f8a3c', '#3f7a35', '#5e9a46'][h % 3], ry: h % 6 }); };
+  // kelompok instance aset Blender: kunci → { geo, mat, list }
+  const AG = {}, useA = AS.state === 'siap';
+  const addA = (key, name, part, cols, it, mat) => { (AG[key] = AG[key] || { geo: () => assetGeo(name, part, cols), mat, list: [] }).list.push(Object.assign({ col: '#ffffff' }, it)); };
+  const tree = (x, z, r, h, y0, near) => {
+    if (near && useA) { const kel = h % 4 === 0, sc2 = r / 15 * (kel ? 0.8 : 0.75); addA(kel ? 'kelapa' : 'mangga', kel ? 'pohon_kelapa' : 'pohon_mangga', 'main', null, { x, z, y: y0 || 0, ry: (h % 628) / 100, sx: sc2, sy: sc2 * (0.9 + (h % 20) / 100), sz: sc2 }); return; }
+    trunks.push({ x, z, y: y0 || 0, sx: 4, sy: r * 1.6, sz: 4, col: '#6b4f33' }); leaves.push({ x, z, y: (y0 || 0) + r * 1.9, sx: r * 1.25, sy: r * 1.15, sz: r * 1.25, col: ['#4f8a3c', '#3f7a35', '#5e9a46'][h % 3], ry: h % 6 }); };
   for (const cell of cells) {
     const { cx, cy, h } = cell;
     if (cell.kind === 'rumah') {
@@ -237,6 +289,22 @@ function buildStatic(Wd) {
     const p = Wd.at(it.d), ry = rotOf(p.a), side = roadSide(it), toward = -side, h = it.h;
     const uc = (it.u0 + it.u1) / 2, w = Math.abs(it.u1 - it.u0), [x, , z] = P(it.d, uc, 0);
     const at = (u, extra) => { const q = P(it.d, u, 0); return Object.assign({ x: q[0], z: q[2], ry }, extra); };
+    const face = ry + (side > 0 ? Math.PI : 0);         // model Blender menghadap +X, putar supaya muka ke jalan
+    if (useA && it.kind !== 'kebun') {
+      if (it.kind === 'ruko') {
+        const i = h % A.WALLC.length, sx = w / 125, sy = 0.72 + ((h >>> 9) % 26) / 100, sz = it.len / 100;
+        addA('ruko' + i, 'ruko', 'main', { cat: A.WALLC[i], ketiga: ['#d9534f', '#3e7cb1', '#2f8f4f', '#e6b33a', '#7a5a9e'][i % 5] }, { x, z, ry: face, sx, sy, sz });
+        const name = A.SHOPS[(h >>> 4) % A.SHOPS.length];
+        (signs[name] = signs[name] || []).push({ d: it.d, u: uc + toward * (66.25 * sx + 0.8), w: Math.min(it.len * 0.9, 120), y0: 86 * sy, y1: 104 * sy, side });
+      } else if (it.kind === 'rumah') {
+        const i = h % A.ROOF.length, sx = w / 125, sz = it.len / 150;
+        addA('rumah' + i, 'rumah', 'main', { cat: WALLS[i % WALLS.length], kedua: A.ROOF[i] }, { x, z, ry: face, sx, sy: Math.max(0.75, Math.min(1.05, (sx + sz) / 2)), sz });
+      } else if (it.kind === 'warung') {
+        const i = h % 4;
+        addA('warung' + i, 'warung', 'main', { ketiga: ['#d9534f', '#3e7cb1', '#2f8f4f', '#e6b33a'][i] }, { x, z, ry: face, sx: Math.min(w, 110) / 75, sy: 1, sz: Math.min(it.len, 120) / 80 });
+      }
+      continue;
+    }
     if (it.kind === 'ruko') {
       const H = 80 + h % 80;
       walls.push({ x, z, ry, sx: w, sy: H, sz: it.len - 2, col: A.WALLC[h % A.WALLC.length] });
@@ -256,7 +324,7 @@ function buildStatic(Wd) {
     } else {
       const pts = [P(it.d - it.len / 2, it.u0, 0), P(it.d - it.len / 2, it.u1, 0), P(it.d + it.len / 2, it.u1, 0), P(it.d + it.len / 2, it.u0, 0)].map(q => [q[0], q[2]]);
       F.flat(side < 0 ? pts : pts.slice().reverse(), 0.3, '#93b06a');
-      for (let k = 0; k < 3; k++) { const hh = hash(h + k), q = P(it.d - it.len / 2 + 14 + hh % Math.max(1, it.len - 28), Math.min(it.u0, it.u1) + 14 + (hh >>> 6) % Math.max(1, w - 28), 0); tree(q[0], q[2], 10 + hh % 6, hh); }
+      for (let k = 0; k < 3; k++) { const hh = hash(h + k), q = P(it.d - it.len / 2 + 14 + hh % Math.max(1, it.len - 28), Math.min(it.u0, it.u1) + 14 + (hh >>> 6) % Math.max(1, w - 28), 0); tree(q[0], q[2], 10 + hh % 6, hh, 0, true); }
     }
   }
   // tiang, lampu jalan, pohon peneduh, motor parkir, gerobak
@@ -264,6 +332,16 @@ function buildStatic(Wd) {
   for (const pr of sc.props) {
     if (pr.kind === 'pejalan') continue;
     const p = Wd.at(pr.d), ry = rotOf(p.a), [x, , z] = P(pr.d, pr.u, 0), toward = -pr.side;
+    if (useA && pr.kind !== 'pohon') {
+      const face = ry + (pr.side > 0 ? Math.PI : 0);
+      if (pr.kind === 'tiang') {
+        const tr = pr.h % 5 === 0; addA(tr ? 'trafo' : 'tiang', tr ? 'tiang_trafo' : 'tiang', 'main', null, { x, z, y: 4, ry, sx: 1, sy: 1, sz: 1 });
+        if (pr.prev) { const q = P(pr.prev.d, pr.prev.u, 0); for (const off of [-16, 16]) { const a = Wd.at(pr.prev.d), b = Wd.at(pr.d); wires.push(q[0] + a.nx * off, 223, q[2] + a.ny * off, x + b.nx * off, 223, z + b.ny * off); } }
+      } else if (pr.kind === 'lampu') { addA('lampu', 'lampu_jalan', 'main', null, { x, z, y: 4, ry: face, sx: 1, sy: 1, sz: 1 }); addA('bohlam', 'lampu_jalan', 'bulb', null, { x, z, y: 4, ry: face, sx: 1, sy: 1, sz: 1 }, 'lamp'); }
+      else if (pr.kind === 'parkir') { const i = pr.h % 3; addA('parkir' + i, 'motor_parkir', 'main', { cat: ['#c0392b', '#1b1b1b', '#2f5d9e'][i] }, { x, z, y: 4, ry: ry + 1.3, sx: 1, sy: 1, sz: 1 }); }
+      else if (pr.kind === 'gerobak') addA('gerobak', 'gerobak', 'main', null, { x, z, y: 4, ry: face + Math.PI / 2, sx: 1, sy: 1, sz: 1 });
+      continue;
+    }
     if (pr.kind === 'tiang') {
       boxes.push({ x, z, y: 4, ry, sx: 5, sy: 226, sz: 5, col: '#6b6b6b' }); boxes.push({ x, z, y: 214, ry, sx: 40, sy: 3, sz: 3, col: '#4a4a4a' });
       if (pr.prev) { const q = P(pr.prev.d, pr.prev.u, 0); for (const off of [-16, 16]) { const a = Wd.at(pr.prev.d), b = Wd.at(pr.d); wires.push(q[0] + a.nx * off, 216, q[2] + a.ny * off, x + b.nx * off, 216, z + b.ny * off); } }
@@ -271,7 +349,7 @@ function buildStatic(Wd) {
       boxes.push({ x, z, y: 4, ry, sx: 4, sy: 170, sz: 4, col: '#777777' });
       const q = P(pr.d, pr.u + toward * 18, 0); boxes.push({ x: q[0], z: q[2], y: 170, ry, sx: 36, sy: 3, sz: 3, col: '#777777' });
       const b2 = P(pr.d, pr.u + toward * 34, 0); lampBulbs.push({ x: b2[0], z: b2[2], y: 164, ry, sx: 10, sy: 5, sz: 10, col: '#ffffff' });
-    } else if (pr.kind === 'pohon') tree(x, z, 15, pr.h, 4);
+    } else if (pr.kind === 'pohon') tree(x, z, 15, pr.h, 4, true);
     else if (pr.kind === 'parkir') { boxes.push({ x, z, y: 4, ry: ry + 1.3, sx: 8, sy: 16, sz: 30, col: '#2a2a2a' }); boxes.push({ x, z, y: 18, ry: ry + 1.3, sx: 10, sy: 4, sz: 14, col: A.SHIRT[pr.h % 8] }); }
     else if (pr.kind === 'gerobak') { boxes.push({ x, z, y: 4, ry, sx: 18, sy: 26, sz: 30, col: '#f1ede2' }); boxes.push({ x, z, y: 40, ry, sx: 22, sy: 3, sz: 34, col: '#d33a2b' }); boxes.push({ x, z, y: 30, ry, sx: 2, sy: 10, sz: 2, col: '#555' }); }
   }
@@ -281,6 +359,8 @@ function buildStatic(Wd) {
   for (const [geo, list] of [[U.box, walls], [U.prism, roofs], [U.box, trunks], [U.ico, leaves], [U.box, boxes]]) grp.add(instanced(geo, list, imat));
   const lampMat = new T.MeshLambertMaterial({ color: 0xfff1c2, emissive: 0xffe08a, emissiveIntensity: 0 });
   grp.add(instanced(U.box, lampBulbs, lampMat));
+  const amat = new T.MeshLambertMaterial({ vertexColors: true });
+  for (const g of Object.values(AG)) grp.add(instanced(g.geo(), g.list, g.mat === 'lamp' ? lampMat : amat));
   if (wires.length) { const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(wires, 3)); grp.add(new T.LineSegments(g, new T.LineBasicMaterial({ color: 0x2a2a2a }))); }
   // papan nama toko (satu geometri per nama)
   for (const name of Object.keys(signs)) {
@@ -364,13 +444,30 @@ function landmark(Wd, L, A) {
 
 /* ---------- penggambar per rit ---------- */
 function create(box, S, spec, o) {
-  const T = root.THREE, A = root.NARIK_DRIVE._, Wd = S.world, U = unitGeos();
+  // kanvas dipasang langsung; isi 3D dibangun setelah aset Blender selesai dimuat (api.ready)
+  const T = root.THREE;
   if (!REN) {
     REN = new T.WebGLRenderer({ antialias: (root.devicePixelRatio || 1) < 2, powerPreference: 'high-performance' });
     REN.setPixelRatio(Math.min(1.5, root.devicePixelRatio || 1));
   }
   const canvas = REN.domElement; canvas.className = 'ny-3d';
   box.insertBefore(canvas, box.firstChild);
+  let impl = null, size = null, gone = false;
+  const api = {
+    canvas, ready: false, proj: () => [180, 400], get scene() { return impl && impl.scene; },
+    render(dt, mode) { if (impl) impl.render(dt, mode); else { REN.setClearColor(0xa9d8f0); REN.clear(); } },
+    resize(a, b, c, d) { size = [a, b, c, d]; REN.setSize(a, b); if (impl) impl.resize(a, b, c, d); },
+    detach() { gone = true; if (impl) impl.detach(); if (canvas.parentNode) canvas.parentNode.removeChild(canvas); }
+  };
+  loadAssets().then(() => {
+    if (gone) return;
+    impl = createImpl(canvas, S, spec, o); if (size) impl.resize(...size);
+    api.proj = impl.proj; api.ready = true;
+  });
+  return api;
+}
+function createImpl(canvas, S, spec, o) {
+  const T = root.THREE, A = root.NARIK_DRIVE._, Wd = S.world, U = unitGeos();
   const st = buildStatic(Wd);
   const scene = new T.Scene(); scene.add(st.grp);
   const dyn = new T.Group(); scene.add(dyn);
@@ -383,24 +480,25 @@ function create(box, S, spec, o) {
   const mats = [];
   const P = (d, u, y) => { const p = Wd.at(d); return [p.x + p.nx * u, y, p.y + p.ny * u]; };
   const put = (m, d, u, y, extraRot) => { const p = Wd.at(d); m.position.set(p.x + p.nx * u, y, p.y + p.ny * u); m.rotation.set(0, rotOf(p.a) + (extraRot || 0), 0); return p; };
-  const mk = (kind, col) => { const m = new T.Mesh(vehicleGeo(kind, col), vmat); dyn.add(m); return m; };
+  const mk = (kind, col, c2, c3) => { const m = new T.Mesh(vehicleGeo(kind, col, c2, c3), vmat); dyn.add(m); return m; };
+  const motorCols = h => hasAsset('motor') ? [A.CARC[(h + 3) % 8], A.SHIRT[h % 8], HELM[h % 8]] : [A.SHIRT[h % 8]];
   // angkot pemain
   const me = mk('angkot', o.hex);
   const brakeMat = new T.MeshBasicMaterial({ color: 0x5a1410 }); mats.push(brakeMat);
-  const brake = new T.Mesh(new T.BoxGeometry(40, 5, 1.5), brakeMat); brake.position.set(0, 16.5, 43.2); me.add(brake);
+  if (hasAsset('angkot')) { for (const sx of [-1, 1]) { const b = new T.Mesh(new T.BoxGeometry(4.6, 9.4, 1), brakeMat); b.position.set(sx * 19, 19.5, 42.6); me.add(b); } }
+  else { const brake = new T.Mesh(new T.BoxGeometry(40, 5, 1.5), brakeMat); brake.position.set(0, 16.5, 43.2); me.add(brake); }
   // kendaraan lain
-  const cars = S.cars.map(m => ({ o: m, mesh: mk(m.kind, m.kind === 'motor' ? A.SHIRT[m.hue % 8] : A.CARC[m.hue % 8]) }));
+  const cars = S.cars.map(m => ({ o: m, mesh: m.kind === 'motor' ? mk('motor', ...motorCols(m.hue)) : mk(m.kind, A.CARC[m.hue % 8]) }));
   const birus = S.biru.map(b => ({ o: b, mesh: mk('angkot', '#35b3c9') }));
   const sc = A.buildScenery(Wd);
-  const onc = sc.oncoming.map(v => ({ v, mesh: mk(v.kind === 'angkot' ? 'angkot' : v.kind, v.kind === 'angkot' ? ['#1a8f4c', '#f2b90f', '#35b3c9'][v.hue % 3] : v.kind === 'motor' ? A.SHIRT[v.hue % 8] : A.CARC[v.hue % 8]) }));
+  const onc = sc.oncoming.map(v => ({ v, mesh: v.kind === 'motor' ? mk('motor', ...motorCols(v.hue + 1)) : mk(v.kind, v.kind === 'angkot' ? ['#1a8f4c', '#f2b90f', '#35b3c9'][v.hue % 3] : A.CARC[v.hue % 8]) }));
   const xcars = [0, 1, 2, 3].map(i => mk('mobil', A.CARC[(i * 3 + 1) % 8]));
   const train = new T.Group(); dyn.add(train);
   for (let i = 0; i < 6; i++) { const m = new T.Mesh(vehicleGeo('kereta', i === 0 ? '#e07b39' : '#3e6fb1'), vmat); m.position.set(-575 + 96 + i * 192, 0, 0); m.rotation.y = Math.PI / 2; train.add(m); }
   // orang: badan dan kepala (instanced, diperbarui tiap frame)
   const NP = 260;
-  const bodyM = new T.InstancedMesh(U.body, new T.MeshLambertMaterial({ color: 0xffffff }), NP), headM = new T.InstancedMesh(U.head, new T.MeshLambertMaterial({ color: 0xffffff }), NP);
-  bodyM.frustumCulled = headM.frustumCulled = false; dyn.add(bodyM); dyn.add(headM);
-  for (let i = 0; i < NP; i++) { bodyM.setColorAt(i, C('#ffffff')); headM.setColorAt(i, C('#ffffff')); }
+  const PARTS = hasAsset('orang') ? ['celana', 'baju', 'kulit', 'rambut'].map(k => [k, assetGeo('orang', k)]) : [['baju', U.body], ['kulit', U.head]];
+  const pm = PARTS.map(([k, g]) => { const m = new T.InstancedMesh(g, new T.MeshLambertMaterial({ color: 0xffffff, vertexColors: k === 'celana' }), NP); m.frustumCulled = false; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m }; });
   const dummy = new T.Object3D();
   // penanda penumpang dan kotak berhenti
   const markMat = new T.MeshLambertMaterial({ color: 0xffd400, emissive: 0x806a00 }); mats.push(markMat);
@@ -422,7 +520,12 @@ function create(box, S, spec, o) {
   const tls = [];
   for (const L of S.lights) {
     const g = new T.Group(); put(g, L.d, 0, 0); dyn.add(g);
-    if (!L.rail) {
+    if (!L.rail && hasAsset('lampu_merah')) {
+      // tiang Blender di trotoar kiri, lengan ke tengah jalan, lampu menghadap pengemudi yang datang
+      const tm = new T.Mesh(assetGeo('lampu_merah'), vmat); tm.position.set(-132, 4, 74); g.add(tm);
+      const lamps = ['merah', 'kuning', 'hijau'].map((k, i) => { const mt = new T.MeshBasicMaterial({ color: 0x333333 }); mats.push(mt); const m = new T.Mesh(assetGeo('lampu_merah', 'lamp' + i), mt); m.position.set(-132, 4, 74); g.add(m); return { k, mt }; });
+      tls.push({ L, lamps });
+    } else if (!L.rail) {
       const b = new GB(); b.box(-135, -129, 4, 150, 71, 77, '#555'); b.box(-132, -8, 142, 147, 72, 76, '#555'); b.box(-44, 0, 126, 146, 70, 78, '#151515');
       g.add(new T.Mesh(b.geo(), vmat));
       const lamps = ['merah', 'kuning', 'hijau'].map((k, i) => { const mt = new T.MeshBasicMaterial({ color: 0x333333 }); mats.push(mt); const m = new T.Mesh(new T.BoxGeometry(9, 9, 2), mt); m.position.set(-36 + i * 13, 136, 78.6); g.add(m); return { k, mt }; });
@@ -477,11 +580,16 @@ function create(box, S, spec, o) {
     for (; xi < xcars.length; xi++) xcars[xi].visible = false;
     // orang
     let n = 0, mi = 0;
-    const person = (d2, u, y, ry, shirt, skin) => { if (n >= NP) return; const q = P(d2, u, y); dummy.position.set(q[0], q[1], q[2]); dummy.rotation.set(0, ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); bodyM.setMatrixAt(n, dummy.matrix); headM.setMatrixAt(n, dummy.matrix); bodyM.setColorAt(n, C(shirt)); headM.setColorAt(n, C(skin)); n++; };
+    const person = (d2, u, y, ry, shirt, skin, h) => {
+      if (n >= NP) return; const q = P(d2, u, y); dummy.position.set(q[0], q[1], q[2]); dummy.rotation.set(0, ry, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+      const col = { baju: shirt, kulit: skin, celana: CELANA[(h || 0) % CELANA.length], rambut: RAMBUT[(h || 0) % RAMBUT.length] };
+      for (const p of pm) { p.m.setMatrixAt(n, dummy.matrix); p.m.setColorAt(n, C(col[p.k])); }
+      n++;
+    };
     for (const g of S.groups) {
       if (g.n <= 0 || g.d < dA || g.d > d + 1600) { continue; }
       const ry = rotOf(Wd.at(g.d).a) - Math.PI / 2;
-      for (let i = 0; i < g.n; i++) { const h = A.hash(Math.floor(g.d) + i); person(g.d + 10 - i * 11, -128 + (i % 2) * 10, 4 + (i === 0 ? Math.abs(Math.sin(t * 7 + g.d)) * 7 : 0), ry, A.SHIRT[h % 8], A.SKIN[(h >>> 3) % 4]); }
+      for (let i = 0; i < g.n; i++) { const h = A.hash(Math.floor(g.d) + i); person(g.d + 10 - i * 11, -128 + (i % 2) * 10, 4 + (i === 0 ? Math.abs(Math.sin(t * 7 + g.d)) * 7 : 0), ry, A.SHIRT[h % 8], A.SKIN[(h >>> 3) % 4], h >>> 6); }
       if (mi < marks.length && g.d < d + 1100) {
         const m = marks[mi], z = zones[mi]; mi++;
         const q = P(g.d, -128, 70 + Math.sin(t * 3 + g.d) * 6); m.position.set(q[0], q[1], q[2]); m.rotation.y = t * 2; m.visible = true;
@@ -489,10 +597,9 @@ function create(box, S, spec, o) {
       }
     }
     for (; mi < marks.length; mi++) { marks[mi].visible = false; zones[mi].visible = false; }
-    for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB) continue; person(pd, pr.u, 4 + Math.abs(Math.sin(t * 8 + pr.h)) * 2, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4]); }
-    for (const pl of S.police) if (pl.d > dA && pl.d < dB) person(pl.d, -126, 4, rotOf(Wd.at(pl.d).a) - Math.PI / 2, '#5b4a2e', '#8d5a3b');
-    bodyM.count = headM.count = n; bodyM.instanceMatrix.needsUpdate = headM.instanceMatrix.needsUpdate = true;
-    if (bodyM.instanceColor) bodyM.instanceColor.needsUpdate = true; if (headM.instanceColor) headM.instanceColor.needsUpdate = true;
+    for (const pr of sc.props) { if (pr.kind !== 'pejalan') continue; const pd = pr.d + pr.v * t; if (pd < dA || pd > dB) continue; person(pd, pr.u, 4 + Math.abs(Math.sin(t * 8 + pr.h)) * 2, rotOf(Wd.at(pd).a) + (pr.v > 0 ? 0 : Math.PI), A.SHIRT[pr.h % 8], A.SKIN[(pr.h >>> 3) % 4], pr.h >>> 6); }
+    for (const pl of S.police) if (pl.d > dA && pl.d < dB) person(pl.d, -126, 4, rotOf(Wd.at(pl.d).a) - Math.PI / 2, '#5b4a2e', '#8d5a3b', 0);
+    for (const p of pm) { p.m.count = n; p.m.instanceMatrix.needsUpdate = true; if (p.m.instanceColor) p.m.instanceColor.needsUpdate = true; }
     // lampu dan palang
     for (const tl of tls) {
       const stt = S.lightState(tl.L);
@@ -505,7 +612,7 @@ function create(box, S, spec, o) {
     // kamera
     const dark = sky(t);
     const low = mode === 'belakang', sp = S.v / S.vMax;
-    const back = low ? 210 : 250 + sp * 40, up = low ? 98 : 330 + sp * 40, ahead = low ? 430 : 200;
+    const back = low ? 210 : 190 + sp * 50, up = low ? 98 : 420 + sp * 40, ahead = low ? 430 : 230;
     const lat = low ? (S.x - 180) * 0.9 : (S.x - 180) * 0.45 - 34;
     const cp = P(d - back, lat, up), lk = P(d + ahead, low ? (S.x - 180) * 0.6 : lat * 0.7, low ? 24 : 0);
     if (!camPos || dt === 0 || Math.hypot(cp[0] - camPos[0], cp[2] - camPos[2]) > 500) { camPos = cp.slice(); camLook = lk.slice(); }
@@ -532,6 +639,7 @@ function create(box, S, spec, o) {
   return { canvas, render, resize, proj, detach, scene };
 }
 
-const API = { available, create, _static: STATIC };
+const API = { available, create, loadAssets, assets: AS, _static: STATIC };
+if (available()) loadAssets();
 root.NARIK_3D = API;
 })(typeof window !== 'undefined' ? window : globalThis);

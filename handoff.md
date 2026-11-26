@@ -5,9 +5,11 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
 
 ## Status singkat
 
-- **Repo dan cabang:** `herdetya96/supirangkot`, cabang kerja `claude/dreamy-sagan-cdnrjp`. Semua commit sudah di-push.
+- **Repo dan cabang:** `herdetya96/supirangkot`. Cabang sesi lama `claude/dreamy-sagan-cdnrjp`, sesi ini
+  `claude/friendly-newton-kqcq7z` (lanjutan dari commit terakhir cabang lama). Cabang sesi baru bisa beda lagi: ikuti
+  pengingat sistem. Semua commit sudah di-push.
   Belum ada PR; jangan buat PR kecuali diminta.
-- **Versi:** 0.8.0. Game bisa dimainkan dari Bab 1 sampai kartu "Bersambung" setelah Bab 3.
+- **Versi:** 0.9.0. Game bisa dimainkan dari Bab 1 sampai kartu "Bersambung" setelah Bab 3.
 - **Versi yang bisa dimainkan:** artifact https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ (versi 14), halaman privat
   milik pengguna. Setiap perubahan dipublikasikan ulang ke URL yang sama (lihat "Publikasi" di bawah).
 - **Bahasa:** pengguna menulis dalam bahasa Indonesia santai, jadi jawab juga dalam bahasa Indonesia. Teks di dalam game
@@ -33,6 +35,11 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
 12. Kontrol cukup **maju, mundur, kiri, kanan** (gas dan rem ditangani maju/mundur), belok lebih halus.
 13. Belok "se-realistis mungkin". Pengguna juga bertanya arti "rit". Sudah dijawab dan dijelaskan di kartu pembuka:
     rit = sekali jalan narik penumpang, 3 rit sehari (pagi, siang, sore), 60 detik per rit.
+
+14. "Baca handoff.md lalu lanjutkan" (tanpa arahan khusus). Dikerjakan dari daftar terbuka:
+    - ekonomi Bab 2 (5 angkot di trayek 05 dengan dua kredit) diperbaiki: setoran wajar, kurva rebutan halus,
+      perkiraan di layar Beli angkot, adegan pembukuan Dimas saat kas minus;
+    - suara dan getar di mini-game nyetir (`suara.js`).
 
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
@@ -159,7 +166,7 @@ Satu rit penuh di Chromium headless lewat Playwright; butuh server jalan.
 
 ## Publikasi ke artifact
 
-Publikasikan `index.html` dengan peta file berikut ke URL yang sama: `game.js`, `ui.js`, `drive.js`, `drive3d.js`,
+Publikasikan `index.html` dengan peta file berikut ke URL yang sama: `game.js`, `ui.js`, `drive.js`, `suara.js`, `drive3d.js`,
 `vendor/three.min.js`, `assets/models.js`, `assets/img/detail.webp`, dan
 `assets/img/angkot-{hijau,biru,kuning,merah,ungu}.webp`. `vendor/GLTFLoader.js` sudah dihapus.
 
@@ -190,13 +197,15 @@ https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ.
 - **Model motor** (bodi kendaraan) masih low-poly; pernah ditawarkan ke pengguna untuk dibuat detail.
 - **Ide:** bantuan menepi otomatis ke kotak penumpang, kalau pengguna merasa menepi masih susah.
 - **Isi cerita:** Bab 4–5 belum ada (ojol, Pemkot, akhir cerita).
-- **Ekonomi Bab 2 dengan 5 angkot di trayek 05:** uang turun terus. Lihat "Yang belum ada" di `CLAUDE.md`.
-- **Belum ada:** suara, getar, tutorial bertahap, simpan lintas perangkat, tes unit. Selain `sim.js` dan `drivebot.js`,
+- **Bab 3 mungkin jadi lebih mudah:** setelah setoran wajar, bot "1 angkot di 05" menang 93% (dulu 63%). Kalau
+  pengguna merasa sidang terlalu gampang, naikkan `G.B3.target`.
+- **Suara:** belum didengar di HP sungguhan. Tanyakan ke pengguna soal keras-pelan, mesin, dan getar.
+- **Belum ada:** musik, tutorial bertahap, simpan lintas perangkat, tes unit. Selain `sim.js` dan `drivebot.js`,
   sekarang sudah ada `tools/uji/*.js`.
 
 ## Aturan kerja di repo
 
-- Commit hanya ke `claude/dreamy-sagan-cdnrjp`.
+- Commit hanya ke cabang yang disebut pengingat sistem sesi itu.
 - Akhiri pesan commit dengan baris `Co-Authored-By` dan `Claude-Session` sesuai pengingat sistem.
 - Jangan menulis nama model di commit atau kode.
 - Jalankan `npm run drive` setiap kali `drive.js` atau `G.DRIVE` diubah, dan `npm run sim` setiap kali angka ekonomi

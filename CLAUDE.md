@@ -27,6 +27,13 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 - `ui.js` = render ulang penuh ke `#v` lewat template string, aksi lewat `data-act`. Tidak boleh berisi aturan main.
 - `drive.js` = mini-game nyetir (`window.NARIK_DRIVE`). `Sim` adalah fisika murni tanpa DOM, `mount` memasang canvas dan kontrol ke `#ny`.
   Juga berisi peta 2D (`draw`) dan HUD bersama (`drawHUD`, menerima `proj(d, x)` → titik layar).
+- `suara.js` = suara dan getar mini-game nyetir (`window.NARIK_SUARA`), semua disintesis Web Audio tanpa berkas audio.
+  `Sim` hanya mengisi antrean `S.sfx` lewat `S.fx(nama)` (null di bot, jadi `drivebot.js` tidak terpengaruh); `mount` mengosongkannya
+  tiap frame ke `SU.play`. Bunyi: mesin (dengung naik-turun dengan laju dan gas, pindah gigi di 4 titik), hujan, klakson,
+  `naik` (pintu geser), `kiri` (ketukan koin ke kaca), `bayar` (koin), `marah`, `serempet`, `tabrak`, `selip`/`decit` (ban),
+  `lubang`, `tilang` (peluit), `mogok`. Getar (`navigator.vibrate`, tidak ada di iPhone) untuk tabrakan, selip, lubang, tilang.
+  Hidup/mati lewat tombol 🔊 di kiri atas, `localStorage` kunci `narik-suara`. AudioContext dibuat saat tombol Gas! ditekan
+  dan dihentikan saat tab disembunyikan.
 - `drive3d.js` = tampilan 3D (`window.NARIK_3D`) memakai three.js r128 di `vendor/three.min.js` (MIT, `vendor/THREE-LICENSE`).
   Dua mode grafis (`localStorage` kunci `narik-grafis`, tombol di kartu pembuka rit):
   - **Tinggi** (bawaan, butuh WebGL2): `MeshStandardMaterial` PBR, warna linear + tone mapping ACES, peta pantulan langit
@@ -194,12 +201,13 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
 
 - Bab 4–5 (masuknya ojol, integrasi Pemkot dan beberapa akhir cerita). Bab 3 berakhir dengan kartu "Bersambung"
   dan permainan tetap bisa lanjut tanpa target bab.
-- Simpan lintas perangkat, suara, tutorial bertahap, pencapaian, berbagi tangkapan layar.
+- Simpan lintas perangkat, musik dan suara di luar nyetir, tutorial bertahap, pencapaian, berbagi tangkapan layar.
 - Pendapatan saat pemain pergi sudah ada (`G.offline`, maks 8 jam, hanya Bab 2) tapi belum diseimbangkan.
 - Peta siang di layar rit masih skematis (SVG). Gambar angkot menu sekarang render Blender per warna; `angkot.webp`
   (render asli prototipe) tidak dipakai lagi tapi disimpan.
 - Belum ada tes unit; `sim.js` dan `drivebot.js` satu-satunya jaring pengaman.
-- Mini-game nyetir belum punya suara, getar, atau tutorial bertahap; penjelasannya hanya kartu sebelum rit.
+- Mini-game nyetir belum punya tutorial bertahap; penjelasannya hanya kartu sebelum rit. Suara belum pernah didengar
+  di HP sungguhan (keras-pelan dan rasa mesin mungkin perlu disetel di `suara.js`).
 - Tampilan 3D belum pernah diukur di HP sungguhan. Di Chromium headless (WebGL perangkat lunak): mode Tinggi ±3 fps,
   Ringan ±8 fps. Fisika memakai langkah ≤0,05 dtk dengan batas 0,5 dtk per frame; di bawah 2 fps waktu rit melambat.
 - Masih bentuk JS sederhana: aspal, marka, sungai, jembatan, rambu, kampung jauh kalau aset gagal dimuat.

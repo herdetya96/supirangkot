@@ -140,7 +140,7 @@ class Sim {
     this.riders = []; this.fares = 0; this.boarded = 0;
     this.hits = 0; this.severe = 0; this.potholes = 0; this.tilang = 0; this.missed = 0; this.stolen = 0; this.merah = 0; this.skids = 0;
     this.cool = 0; this.shake = 0; this.stopT = 0; this.braking = false; this.over = false; this.mogok = false; this.deadT = 0; this.skidCool = 0; this.slide = 0;
-    this.msgs = []; this.pops = []; this.crossers = [];
+    this.msgs = []; this.pops = []; this.crossers = []; this.sfx = null;   // sfx: antrean bunyi, diisi hanya kalau mount memasang []
     const gaps = [...Wd.cross.map(c => c.d), Wd.river.d, Wd.rail.d];
     const nudge = d => { for (const g of gaps) if (Math.abs(d - g) < 115) return g + 125; for (const j of Wd.junctions) if (d > j.d0 - 140 && d < j.d1 + 80) return j.d1 + 150; return d; };
     this.groups = spec.groups.map(g => ({ d: nudge(g.d), n: g.n, n0: g.n, prog: 0, taken: null, lure: this.r() < 0.4 }));
@@ -157,6 +157,7 @@ class Sim {
   lightState(L) { const p = this.phase(L); if (L.rail) return p < 14 ? 'hijau' : p < 15.5 ? 'kuning' : 'merah'; return p < 11 ? 'hijau' : p < 12.5 ? 'kuning' : 'merah'; }
   nextLight(d) { return this.lights.find(L => L.d - 70 > d); }
   say(text, kind) { if (this.msgs.some(m => m.text === text && m.t < 1.5)) return; this.msgs.push({ text, kind: kind || '', t: 0 }); if (this.msgs.length > 3) this.msgs.shift(); }
+  fx(name) { if (this.sfx && this.sfx.length < 16) this.sfx.push(name); }
   pop(text, good) { this.pops.push({ x: this.x, d: this.d, text, good, t: 0 }); }
   turnV(d, x) { const r = this.world.radius(d, x); return r === Infinity ? Infinity : Math.sqrt(A_LAT * Math.max(20, r)) * (this.spec.wet ? 0.9 : 1); }
   atCurb() { return this.x < CURB_X && Math.abs(this.v) < STOP_V; }
@@ -166,7 +167,7 @@ class Sim {
     for (const m of this.msgs) m.t += dt; this.msgs = this.msgs.filter(m => m.t < 2.6);
     for (const p of this.pops) p.t += dt; this.pops = this.pops.filter(p => p.t < 1.2);
     this.cool = Math.max(0, this.cool - dt); this.shake = Math.max(0, this.shake - dt); this.skidCool = Math.max(0, this.skidCool - dt);
-    if (S.mogokAt != null && this.t >= S.mogokAt && !this.mogok) { this.mogok = true; this.say('Mesin mati! Mogok.', 'bad'); }
+    if (S.mogokAt != null && this.t >= S.mogokAt && !this.mogok) { this.mogok = true; this.say('Mesin mati! Mogok.', 'bad'); this.fx('mogok'); }
     // gas dan rem: tanpa gas angkot melambat sendiri (rem mesin). inp.gas kosong = gas terus (bot lama)
     // Gigi mundur (inp.mundur): gas mendorong ke belakang. Kalau angkot masih maju, gas mengerem dulu sampai berhenti
     // (dan sebaliknya). Tombol ▼ di mount mengisi inp.mundur. Bot tidak mengisi inp.mundur, jadi selalu maju.
@@ -245,16 +246,16 @@ class Sim {
       this.x += Math.abs(dx) < lat ? dx : Math.sign(dx) * lat;
     }
     const xmin = ROAD_L + PW / 2, xmax = ROAD_R - PW / 2;
-    if (this.skid && this.slide > SLIDE_MAX * 0.35) this.say('Ban berdecit! Rem!', 'bad');
+    if (this.skid && this.slide > SLIDE_MAX * 0.35) { this.say('Ban berdecit! Rem!', 'bad'); this.fx('decit'); }
     if (this.slide >= SLIDE_MAX && this.skidCool <= 0) {
-      this.skids++; this.v *= 0.55; this.slide = 0; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di persimpangan!', 'bad');
+      this.skids++; this.v *= 0.55; this.slide = 0; this.skidCool = 1.2; this.shake = 0.3; this.say('Kebablasan di persimpangan!', 'bad'); this.fx('selip');
     }
     if (bebas) {
-      if (this.under) this.say('Ban berdecit! Kurangi gas!', 'bad');
+      if (this.under) { this.say('Ban berdecit! Kurangi gas!', 'bad'); this.fx('decit'); }
       // menabrak tepi jalan: menyentuh pelan (geser ke samping < 45) = cuma mentok dan sejajar; benturan keras = kebablasan.
       const lv = this.v * Math.sin(this.psi), into = Math.abs(lv) > 45 && ((this.x <= xmin && lv < 0) || (this.x >= xmax && lv > 0));
       if (into) {
-        if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di persimpangan!' : 'Nyenggol pinggir jalan!', 'bad'); }
+        if (spd > 110 && this.skidCool <= 0) { this.skids++; this.v *= 0.6; this.skidCool = 1.2; this.shake = 0.3; this.say(k ? 'Kebablasan di persimpangan!' : 'Nyenggol pinggir jalan!', 'bad'); this.fx('selip'); }
         this.psi *= 0.3;
         if (k) { const j = this.world.junctions.find(j => this.d >= j.d0 && this.d <= j.d1); if (j) { this.rescue = j.d1; this.psi = 0; this.yr = 0; this.kapA = 0; } }
       }
@@ -274,14 +275,14 @@ class Sim {
     for (const L of this.lights) {
       const sl = L.d - 70;
       if (prev + PL / 2 < sl && this.d + PL / 2 >= sl && this.lightState(L) === 'merah') {
-        this.tilang++; this.merah++; this.say(L.rail ? 'Menerobos palang kereta! Ditilang.' : 'Menerobos lampu merah! Ditilang.', 'bad');
+        this.tilang++; this.merah++; this.say(L.rail ? 'Menerobos palang kereta! Ditilang.' : 'Menerobos lampu merah! Ditilang.', 'bad'); this.fx('tilang');
       }
     }
     this.stepTraffic(dt);
     this.stepCrossers();
     this.collide();
     this.passengers(dt);
-    for (const p of this.police) if (!p.done && this.d >= p.d) { p.done = true; if (this.v > 0.82 * this.vMax) { this.tilang++; this.say('Ditilang polisi! Kebut-kebutan.', 'bad'); } else this.say('Polisi mengangguk. Aman.'); }
+    for (const p of this.police) if (!p.done && this.d >= p.d) { p.done = true; if (this.v > 0.82 * this.vMax) { this.tilang++; this.say('Ditilang polisi! Kebut-kebutan.', 'bad'); this.fx('tilang'); } else this.say('Polisi mengangguk. Aman.'); }
     if (this.t >= S.dur || (this.mogok && this.v <= 0 && (this.deadT += dt) > 1.2)) this.finish();
   }
   stopFor(o) {
@@ -349,25 +350,25 @@ class Sim {
     for (const c of this.crossers) {
       if (!overlap(this.x, this.d, PW, PL, c.x, c.d, c.w, c.l)) continue;
       this.hits++; this.severe += c.kind === 'kereta' ? 2 : 1; this.v = 0; this.d = c.d - c.l / 2 - PL / 2 - 2; this.cool = 1.5; this.shake = 0.5;
-      this.say(c.kind === 'kereta' ? 'Disambar kereta! Untung masih hidup.' : 'Brak! Ditabrak dari samping.', 'bad'); return;
+      this.say(c.kind === 'kereta' ? 'Disambar kereta! Untung masih hidup.' : 'Brak! Ditabrak dari samping.', 'bad'); this.fx('tabrak'); return;
     }
     const hit = o => {
       if (!overlap(this.x, this.d, PW, PL, o.x, o.d, o.w, o.l)) return false;
       if (o.d < this.d) {
         // mundur menabrak kendaraan di belakang = salah kita; kalau tidak, dia yang menyeruduk dan ikut berhenti
-        if (this.v < -15) { this.hits++; this.say('Nyerempet waktu mundur!', 'bad'); this.v = 0; this.d = o.d + (PL + o.l) / 2 + 2; this.cool = 1; this.shake = 0.3; return true; }
+        if (this.v < -15) { this.hits++; this.say('Nyerempet waktu mundur!', 'bad'); this.fx('serempet'); this.v = 0; this.d = o.d + (PL + o.l) / 2 + 2; this.cool = 1; this.shake = 0.3; return true; }
         o.d = this.d - (PL + o.l) / 2 - 2; o.v = Math.min(o.v, Math.max(0, this.v)); return false;
       }
       const ov = o.state === 'ngetem' ? 0 : o.v, rel = this.v - ov;
       if (this.v < 0) { this.v = 0; return false; }
-      this.hits++; if (rel > 150) { this.severe++; this.say('Brak! Nabrak, harus ganti rugi.', 'bad'); } else this.say('Nyerempet!', 'bad');
+      this.hits++; if (rel > 150) { this.severe++; this.say('Brak! Nabrak, harus ganti rugi.', 'bad'); this.fx('tabrak'); } else { this.say('Nyerempet!', 'bad'); this.fx('serempet'); }
       this.v = Math.min(this.v, ov * 0.5); o.d = this.d + (PL + o.l) / 2 + 6; this.cool = 1; this.shake = 0.35;
       return true;
     };
     for (const m of this.cars) if (hit(m)) return;
     for (const b of this.biru) if (hit(b)) return;
     for (const p of this.pots) if (!p.used && this.v > 100 && overlap(this.x, this.d, PW, PL, p.x, p.d, 26, 16)) {
-      p.used = true; this.potholes++; this.v *= 0.75; this.shake = 0.25; this.say('Gluduk! Lubang.', 'bad');
+      p.used = true; this.potholes++; this.v *= 0.75; this.shake = 0.25; this.say('Gluduk! Lubang.', 'bad'); this.fx('lubang');
     }
   }
   passengers(dt) {
@@ -381,13 +382,13 @@ class Sim {
           if (k <= 0) { this.say('Penuh!'); g.prog = 0.46; continue; }
           for (let i = 0; i < k; i++) this.riders.push({ drop: this.d + 900 + this.r() * 2200, st: 'ride' });
           g.n -= k; this.boarded += k; if (g.n <= 0) g.taken = 'me'; g.prog = 0;
-          this.say(k === 1 ? 'Satu naik.' : `${k} orang naik.`, 'good');
+          this.say(k === 1 ? 'Satu naik.' : `${k} orang naik.`, 'good'); this.fx('naik');
         }
       } else g.prog = Math.max(0, g.prog - dt * 2);
     }
     for (const p of this.riders) {
-      if (p.st === 'ride' && this.d >= p.drop) { p.st = 'kiri'; p.dead = p.drop + 500; this.say('“Kiri, Bang!”', 'kiri'); }
-      else if (p.st === 'kiri' && this.d > p.dead) { p.st = 'marah'; this.say('“Kelewatan! Nggak mau bayar!”', 'bad'); }
+      if (p.st === 'ride' && this.d >= p.drop) { p.st = 'kiri'; p.dead = p.drop + 500; this.say('“Kiri, Bang!”', 'kiri'); this.fx('kiri'); }
+      else if (p.st === 'kiri' && this.d > p.dead) { p.st = 'marah'; this.say('“Kelewatan! Nggak mau bayar!”', 'bad'); this.fx('marah'); }
     }
     this.stopT = curb ? this.stopT + dt : 0;
     if (this.stopT >= 0.35) {
@@ -395,7 +396,7 @@ class Sim {
       if (out.length) {
         let pay = 0; for (const p of out) { if (p.st === 'marah') this.missed++; else pay += this.spec.fare; }
         this.fares += pay; this.riders = this.riders.filter(p => !out.includes(p));
-        this.pop(pay ? '+' + Math.round(pay) + ' rb' : 'Ogah bayar!', pay > 0);
+        this.pop(pay ? '+' + Math.round(pay) + ' rb' : 'Ogah bayar!', pay > 0); this.fx(pay ? 'bayar' : 'marah');
       }
     }
   }
@@ -851,10 +852,11 @@ function mount(host, spec, opts, done) {
   const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
   const Wd = buildWorld(spec.route), stops = Wd.landmarks.map(l => l.name);
   const R3 = root.NARIK_3D && root.NARIK_3D.available() ? root.NARIK_3D : null;
+  const SU = root.NARIK_SUARA || null; let eng = null;
   const modes = R3 ? ['atas', 'belakang', '2d'] : ['2d'];
   let mode = modes.includes(camLoad()) ? camLoad() : modes[0];
   host.innerHTML = `<div class="nyetir" role="application" aria-label="Nyetir angkot">
-    <div class="ny-kanvas"><canvas class="ny-hud"></canvas>${modes.length > 1 ? `<button class="ny-kam" data-ny="kam" aria-label="Ganti kamera">🎥 <span>${CAMS[mode]}</span></button>` : ''}
+    <div class="ny-kanvas"><canvas class="ny-hud"></canvas>${modes.length > 1 ? `<button class="ny-kam" data-ny="kam" aria-label="Ganti kamera">🎥 <span>${CAMS[mode]}</span></button>` : ''}${SU ? `<button class="ny-suara" data-ny="suara" aria-label="Suara dan getar" aria-pressed="${SU.on}">${SU.on ? '🔊' : '🔇'}</button>` : ''}
       <div class="ny-lapis" data-ny="intro"><div class="ny-kartu"><span class="eyebrow">Rit ${esc(opts.shiftName)} · Trayek ${esc(spec.route)}</span><h2>${esc(stops[0])} → ${esc(stops[stops.length - 1])}</h2>
         <p class="ny-rute">${stops.map(esc).join(' · ')}</p>
         <p class="ny-rit"><b>Rit</b> = sekali jalan narik penumpang di trayek ini, dari ${esc(stops[0])} ke arah ${esc(stops[stops.length - 1])}. Sehari ada tiga rit: pagi, siang, sore. Satu rit 60 detik.</p>
@@ -864,7 +866,7 @@ function mount(host, spec, opts, done) {
         <li>Rute berbelok di <b>perempatan</b> dan <b>pertigaan</b>; arahnya ditunjuk panah. Pelan-pelan, lalu <b>tahan ◀ atau ▶ ke arah panah</b> sampai lurus lagi. Terlalu kencang (kiri ±30 km/j, kanan ±44 km/j) = <b>kebablasan</b>.</li>
         <li>Orang melambai di trotoar: <b>menepi ke kotak kuning dan berhenti</b>.</li><li>Ada yang teriak <b>“Kiri!”</b>: menepi dan berhenti. Ongkos dibayar waktu turun. Kelewatan, dia tidak mau bayar.</li>
         <li>Patuhi <b>lampu merah</b> dan <b>palang kereta</b>. Awas motor, mobil, lubang, dan polisi. Angkot biru suka menyerobot penumpang.</li>
-        <li>Keyboard: ↑/W maju, ↓/S mundur, ←→/A/D belok, spasi rem, H klakson, C kamera.</li></ul>
+        <li>Keyboard: ↑/W maju, ↓/S mundur, ←→/A/D belok, spasi rem, H klakson, C kamera.</li>${SU ? '<li>Ada suara dan getar. Matikan dengan tombol 🔊 di kiri atas.</li>' : ''}</ul>
         ${spec.wet ? '<p><b>Hujan:</b> rem licin, penumpang lebih banyak.</p>' : ''}${spec.wobble ? '<p><b>Kamu ngantuk:</b> setir agak goyang.</p>' : ''}${spec.sh === 2 ? '<p><b>Sore:</b> makin lama makin gelap.</p>' : ''}
         <p>Tarif ±Rp ${spec.tarif} rb per penumpang.</p>
         <button class="gas" data-ny="go">Gas!</button>${R3 ? `<button class="btn-teks" data-ny="grafis">Grafis: <b>${R3.quality() === 'tinggi' ? 'Tinggi' : 'Ringan'}</b> (ketuk untuk ganti)</button>` : ''}<button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
@@ -876,7 +878,7 @@ function mount(host, spec, opts, done) {
     </div></div>`;
   const root2 = host.firstElementChild, cv = root2.querySelector('canvas.ny-hud'), box = root2.querySelector('.ny-kanvas'), c = cv.getContext('2d');
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const S = new Sim(spec); let H = 640, k = 1, raf = 0, last = 0, running = false, closed = false;
+  const S = new Sim(spec); if (SU) S.sfx = []; let H = 640, k = 1, raf = 0, last = 0, running = false, closed = false;
   const inp = { tx: null, brake: false, gas: 0, steer: 0, mundur: false }, keys = {}, btn = { l: false, r: false, up: false, dn: false };
   let steerVal = 0, holdR = 0, r3 = null;
   const o = { hex: opts.hex, route: spec.route, wet: spec.wet, sh: spec.sh, reduce, routeCol: opts.routeCol, zoom: Z_STOP, psx: W / 2, ppu: Z_STOP, cam: mode };
@@ -906,6 +908,7 @@ function mount(host, spec, opts, done) {
     if (r3 && !r3.ready && !running) { goBtn.disabled = true; goBtn.textContent = 'Memuat kota 3D…'; }
     else if (goBtn.disabled && !running) { goBtn.disabled = false; goBtn.textContent = 'Gas!'; }
     if (running) for (let left = dt; left > 1e-6 && !S.over; left -= 0.05) S.step(Math.min(0.05, left), inp);
+    if (SU) { if (eng) eng.update(S, inp); while (S.sfx.length) SU.play(S.sfx.shift()); }
     // arah kamera = arah hadap angkot (arah jalan + sudut badan), dihaluskan supaya tidak ikut gemetar
     { const hc = Wd.at(S.d).a + S.yaw; if (o.camH == null || !dt) o.camH = hc; else { const dh = Math.atan2(Math.sin(hc - o.camH), Math.cos(hc - o.camH)); o.camH += dh * Math.min(1, dt * 6); } }
     o.zoom += (Z_STOP - (Z_STOP - Z_FAST) * Math.abs(S.v) / S.vMax - o.zoom) * Math.min(1, dt * 1.5);
@@ -924,6 +927,7 @@ function mount(host, spec, opts, done) {
   }
   function end() {
     const R = S.result(), L = root2.querySelector('.ny-lapis');
+    if (eng) { eng.stop(); eng = null; } if (SU && S.endPay) SU.play('bayar');
     const lines = [`${R.riders} penumpang naik. Ongkos terkumpul <b>Rp ${R.fares} rb</b>.`];
     if (S.endPay) lines.push(`Sisa penumpang turun di akhir rit: Rp ${Math.round(S.endPay)} rb.`);
     if (R.missed) lines.push(`${R.missed} penumpang kelewatan turun dan tidak mau bayar.`);
@@ -939,7 +943,7 @@ function mount(host, spec, opts, done) {
     // tombol dikunci sebentar supaya rem/spasi yang masih ditahan tidak langsung menutup ringkasan
     L.hidden = false; const bt = L.querySelector('button'); bt.disabled = true; setTimeout(() => { bt.disabled = false; bt.focus(); }, 700);
   }
-  function close(res) { closed = true; cancelAnimationFrame(raf); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', size); if (r3) r3.detach(); host.innerHTML = ''; done(res); }
+  function close(res) { if (eng) { eng.stop(); eng = null; } closed = true; cancelAnimationFrame(raf); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); window.removeEventListener('resize', size); if (r3) r3.detach(); host.innerHTML = ''; done(res); }
   const goBtn = root2.querySelector('[data-ny="go"]');
   // tombol arah: ditahan selama jari menempel (pointer capture, jadi jari yang bergeser tidak melepas tombol)
   const hold = (el, key) => {
@@ -951,7 +955,7 @@ function mount(host, spec, opts, done) {
   hold(root2.querySelector('[data-ny="kiri"]'), 'l'); hold(root2.querySelector('[data-ny="kanan"]'), 'r');
   hold(root2.querySelector('[data-ny="maju"]'), 'up'); hold(root2.querySelector('[data-ny="mundur"]'), 'dn');
   const tinBtn = root2.querySelector('[data-ny="tin"]');
-  function klakson() { if (running) S.say('Tin tin!'); tinBtn.classList.add('on'); setTimeout(() => tinBtn.classList.remove('on'), 180); }
+  function klakson() { if (SU) { SU.ensure(); SU.play('tin'); } if (running) S.say('Tin tin!'); tinBtn.classList.add('on'); setTimeout(() => tinBtn.classList.remove('on'), 180); }
   tinBtn.addEventListener('pointerdown', e => { e.preventDefault(); klakson(); });
   const KM = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r', ' ': 'x', ArrowDown: 'b', s: 'b', S: 'b', ArrowUp: 'g', w: 'g', W: 'g' };
   function kd(e) {
@@ -962,7 +966,8 @@ function mount(host, spec, opts, done) {
   window.addEventListener('keydown', kd); window.addEventListener('keyup', ku); window.addEventListener('resize', size);
   root2.addEventListener('click', e => {
     const b = e.target.closest('[data-ny]'); if (!b) return; const a = b.dataset.ny;
-    if (a === 'go') { b.closest('.ny-lapis').hidden = true; running = true; }
+    if (a === 'go') { b.closest('.ny-lapis').hidden = true; running = true; if (SU && SU.ensure()) eng = SU.engine(spec.wet); }
+    if (a === 'suara' && SU) { SU.setOn(!SU.on); if (SU.on) SU.ensure(); b.textContent = SU.on ? '🔊' : '🔇'; b.setAttribute('aria-pressed', SU.on); }
     if (a === 'auto') close(null);
     if (a === 'done') close(S.result());
     if (a === 'kam') cycle();

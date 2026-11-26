@@ -34,6 +34,8 @@ Tidak ada build step. Satu-satunya pustaka, three.js r128 untuk tampilan 3D, dis
 | `assets/models.js` | Semua model dalam format ringkas (dibuat `tools/pack_models.js`) |
 | `tools/blender/karakter/` | Skrip Blender karakter detail tinggi: `build.py`, `lib.py`, `render.py`, `ambil_data.sh` |
 | `art/karakter/` | Empat tokoh cerita versi realistis (`.blend`, `.glb`, render). Tidak dipakai game |
+| `tools/blender/angkot/build.py` | Skrip Blender angkot detail tinggi (`npm run angkot-detail`) |
+| `art/angkot/` | Angkot trayek 05 versi detail (`.blend`, `.glb`, render). Tidak dipakai game |
 | `drivebot.js` | Bot sopir untuk menyeimbangkan mini-game nyetir |
 | `sim.js` | Bot yang memainkan ratusan permainan untuk menguji keseimbangan |
 | `angkot.webp` | Render angkot asli prototipe (tidak dipakai lagi) |

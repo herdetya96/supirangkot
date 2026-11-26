@@ -78,6 +78,8 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   Dipakai game hanya sebagai potret adegan cerita: `assets/img/potret-<id>.webp` (440×550, ±10 KB) = `render/<id>_wajah.jpg`
   diperkecil. `ui.js` (`POTRET`) menampilkannya di atas balon dialog; tokoh lain tetap lingkaran huruf.
   `.glb`-nya (±15 MB, tanpa rambut) terlalu berat untuk dunia 3D di HP.
+- Angkot detail tinggi (`art/angkot/`, ±134 ribu segitiga, 196 mesh): aset seni, bukan aset game, dibuat `npm run angkot-detail`
+  (`tools/blender/angkot/build.py`, ±1 menit, butuh `pip install bpy`). Sama seperti karakter: jangan taruh `.glb`-nya di `assets/models/`.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 

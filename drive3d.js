@@ -801,8 +801,11 @@ function createImpl(canvas, S, spec, o) {
     // kamera atas sedikit menoleh ke landmark yang sedang dilewati supaya bangunannya terlihat
     let bias = 0;
     if (!low) for (const L of Wd.landmarks) { const k = Math.max(0, 1 - Math.abs(L.d - d - 120) / 520); bias += k * (L.side < 0 ? -95 : 85); }
-    const lat = low ? (S.x - 180) * 0.9 : (S.x - 180) * 0.45 - 34 + bias;
-    const cp = P(d - back, lat, up), lk = P(d + ahead, low ? (S.x - 180) * 0.6 : lat * 0.7, low ? 24 : 0);
+    // kamera ikut angkot: di belakang angkot dan menghadap ke mana angkot menghadap (bukan ke arah jalan)
+    const u0 = S.x - 180, ax = pc.x + pc.nx * u0, az = pc.y + pc.ny * u0;
+    const h = o.camH != null ? o.camH : pc.a + S.yaw, fx = Math.cos(h), fz = Math.sin(h), rx = -fz, rz = fx;
+    const lat = low ? 0 : -34 + bias, latL = low ? 0 : lat * 0.7;
+    const cp = [ax - fx * back + rx * lat, up, az - fz * back + rz * lat], lk = [ax + fx * ahead + rx * latL, low ? 24 : 0, az + fz * ahead + rz * latL];
     if (!camPos || dt === 0 || Math.hypot(cp[0] - camPos[0], cp[2] - camPos[2]) > 500) { camPos = cp.slice(); camLook = lk.slice(); }
     const f = 1 - Math.exp(-dt * 7);
     for (let i = 0; i < 3; i++) { camPos[i] += (cp[i] - camPos[i]) * f; camLook[i] += (lk[i] - camLook[i]) * f; }

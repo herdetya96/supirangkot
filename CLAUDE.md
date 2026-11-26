@@ -87,7 +87,9 @@ Gigi mundur (`inp.mundur`, tombol MUNDUR/MAJU atau R): gas mendorong ke belakang
 bergerak ke arah lain, gas mengerem dulu. Mundur menabrak kendaraan di belakang = serempet. Lampu mundur putih di 2D dan 3D.
 Angkot diam tidak bisa bergeser. Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D lajur atau setir, R mundur/maju, H klakson, C kamera. Bot (`drivebot.js`) tetap
 memakai target lajur `inp.tx` dan gas penuh kecuali saat mengerem, jadi angka keseimbangan tidak berubah. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
-`localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Setir jari memakai posisi angkot di layar
+`localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Semua kamera ikut angkot, bukan jalan: berpusat di angkot dan
+menghadap arah hadap angkot (`o.camH` = arah jalan + `S.yaw`, dihaluskan di `mount`), jadi di tikungan jalan terlihat
+membelok di depan dan pemain tahu harus membelokkan. Setir jari memakai posisi angkot di layar
 (`o.psx`, `o.ppu`), jadi sama untuk ketiganya. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat
 waktu rit tetap sama dengan waktu nyata. Tombol Lanjut di ringkasan dikunci 0,7 dtk supaya rem/spasi yang masih
 ditahan tidak menutupnya.

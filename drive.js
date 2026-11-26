@@ -588,7 +588,9 @@ function drawLandmark(c, L, t) {
 
 function draw(c, S, H, o) {
   const Wd = S.world, sc = buildScenery(Wd), d = S.d, PY = H * 0.72, t = S.t, Z = o.zoom || Z_STOP;
-  const cam = Wd.at(d), cx = cam.x + cam.nx * CAM_U, cy = cam.y + cam.ny * CAM_U, rot = -Math.PI / 2 - cam.a;
+  // kamera ikut angkot: berpusat di angkot dan berputar mengikuti arah hadap angkot (o.camH), bukan arah jalan
+  const cam = Wd.at(d), u0 = S.x - 180, h = o.camH != null ? o.camH : cam.a, hx = Math.cos(h), hy = Math.sin(h);
+  const cx = cam.x + cam.nx * u0 - hy * CAM_U, cy = cam.y + cam.ny * u0 + hx * CAM_U, rot = -Math.PI / 2 - h;
   const cr = Math.cos(rot), sr = Math.sin(rot);
   const toScreen = (wx, wy) => [W / 2 + Z * (cr * (wx - cx) - sr * (wy - cy)), PY + Z * (sr * (wx - cx) + cr * (wy - cy))];
   const dA = d - (H - PY) / Z - 350, dB = d + PY / Z + 450;
@@ -837,6 +839,8 @@ function mount(host, spec, opts, done) {
     if (r3 && !r3.ready && !running) { goBtn.disabled = true; goBtn.textContent = 'Memuat kota 3D…'; }
     else if (goBtn.disabled && !running) { goBtn.disabled = false; goBtn.textContent = 'Gas!'; }
     if (running) for (let left = dt; left > 1e-6 && !S.over; left -= 0.05) S.step(Math.min(0.05, left), inp);
+    // arah kamera = arah hadap angkot (arah jalan + sudut badan), dihaluskan supaya tidak ikut gemetar
+    { const hc = Wd.at(S.d).a + S.yaw; if (o.camH == null || !dt) o.camH = hc; else { const dh = Math.atan2(Math.sin(hc - o.camH), Math.cos(hc - o.camH)); o.camH += dh * Math.min(1, dt * 6); } }
     o.zoom += (Z_STOP - (Z_STOP - Z_FAST) * Math.abs(S.v) / S.vMax - o.zoom) * Math.min(1, dt * 1.5);
     c.setTransform(k * dpr(), 0, 0, k * dpr(), 0, 0);
     if (r3 && mode !== '2d') {

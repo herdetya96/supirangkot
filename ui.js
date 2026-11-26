@@ -307,10 +307,15 @@ function scPick(i) {
   sc.choosing = false; sc.chosen = true; sc.fin = true;
   if (extra && extra.length) { sc.lines = extra; sc.li = 0; render(); } else { sc.li = sc.lines.length - 1; scNext(); }
 }
+/* potret tokoh dari render karakter detail tinggi (art/karakter/render/<id>_wajah.jpg, diperkecil) */
+const POTRET = ['ujang', 'sobari', 'rina', 'dimas'];
+for (const id of POTRET) { const im = new Image(); im.src = `assets/img/potret-${id}.webp`; }   // dimuat duluan supaya tidak berkedip
 function sceneHTML() {
   const sc = U.sc; if (!sc) return '';
   const [who, text] = sc.lines[sc.li], C = G.CHAR[who] || G.CHAR.narator, nar = who === 'narator', name = who === 'kamu' ? S.name : C.name;
-  const bub = `${nar ? '' : `<div class="wajah" style="--c:${C.c}" aria-hidden="true">${esc(name.replace(/^(Mang|Teh|Haji|Bang|Kang|Bu) /, '')[0])}</div>`}
+  const face = nar ? '' : POTRET.includes(who) ? `<div class="potret" style="--c:${C.c}" aria-hidden="true"><img src="assets/img/potret-${who}.webp" alt="" width="440" height="550"></div>`
+    : `<div class="wajah" style="--c:${C.c}" aria-hidden="true">${esc(name.replace(/^(Mang|Teh|Haji|Bang|Kang|Bu) /, '')[0])}</div>`;
+  const bub = `${face}
     <div class="bicara ${nar ? 'narator' : ''}">${nar ? '' : `<span class="tag" style="--c:${C.c}">${esc(name)}</span>`}<p>${esc(text)}</p>${sc.choosing ? '' : '<span class="ketuk">Ketuk untuk lanjut</span>'}</div>`;
   if (sc.choosing) { const ch = sc.q[sc.qi].choices;
     return `<div class="lapis gelap"><div class="adegan" style="cursor:default">${bub}<div class="pilihan" style="margin-top:12px">${ch.map((c, i) => `<button data-act="sc-pick" data-i="${i}" ${c.ok ? '' : 'disabled'}><b>${esc(c.label)}</b>${c.ok ? '' : `<small>${esc(c.why || 'Uang tidak cukup')}</small>`}</button>`).join('')}</div></div></div>`; }

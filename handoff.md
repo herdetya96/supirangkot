@@ -45,6 +45,11 @@ keputusan yang sudah diambil bersama pengguna, cara kerja, dan pekerjaan yang ma
     (keluar simpang sambil masih menahan tombol, menyentuh tepi, kebablasan, menekan terlalu awal). Sekarang arah hanya
     berubah lewat putaran yang mulus. Belum dicoba pengguna di HP; tanyakan juga fps-nya (fps rendah juga terasa patah-patah).
 
+16. "Aku udah upload file orang di github, pake itu" (cabang `claude/karakter-3d`, dibuat sesi lain: empat tokoh detail
+    tinggi). Digabung ke cabang kerja. Render wajahnya dipakai sebagai potret di adegan cerita. Belum dipakai di dunia 3D
+    nyetir: `.glb` ±15 MB per tokoh dan rambutnya tidak ikut. Kalau pengguna mau tokoh ini muncul di jalan, perlu versi
+    ringan (dikurangi ke ±10 ribu segitiga, rambut dijadikan mesh) lewat Blender.
+
 Polanya: pengguna menguji di HP lalu memberi umpan balik singkat soal rasa kontrol. Utamakan rasa main yang konsisten dan
 halus, dan jelaskan perubahan dengan bahasa awam.
 
@@ -172,7 +177,7 @@ Satu rit penuh di Chromium headless lewat Playwright; butuh server jalan.
 
 Publikasikan `index.html` dengan peta file berikut ke URL yang sama: `game.js`, `ui.js`, `drive.js`, `suara.js`, `drive3d.js`,
 `vendor/three.min.js`, `assets/models.js`, `assets/img/detail.webp`, dan
-`assets/img/angkot-{hijau,biru,kuning,merah,ungu}.webp`. `vendor/GLTFLoader.js` sudah dihapus.
+`assets/img/angkot-{hijau,biru,kuning,merah,ungu}.webp`, `assets/img/potret-{ujang,sobari,rina,dimas}.webp`. `vendor/GLTFLoader.js` sudah dihapus.
 
 Kalau sesi baru belum pernah membaca artifact itu, baca dulu (action `read`), lalu publikasikan dengan `url`
 https://claude.ai/artifact/LRdtSaeKeLAt6dMMBwMcfQ.

@@ -75,6 +75,9 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   semua isi folder itu. `build.py` memakai mesh dasar MakeHuman (CC0), morf per tokoh di kamus `CHARS`, pose lewat bobot rig,
   pakaian dari permukaan badan yang disimulasikan sebagai kain, dan rambut/alis/kumis/bulu mata sebagai helai Curves
   (tidak ikut ke GLB). Catatan lengkap dan kekurangannya di `art/karakter/README.md`.
+  Dipakai game hanya sebagai potret adegan cerita: `assets/img/potret-<id>.webp` (440×550, ±10 KB) = `render/<id>_wajah.jpg`
+  diperkecil. `ui.js` (`POTRET`) menampilkannya di atas balon dialog; tokoh lain tetap lingkaran huruf.
+  `.glb`-nya (±15 MB, tanpa rambut) terlalu berat untuk dunia 3D di HP.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
 - Uang dalam ribuan rupiah (`250` = Rp 250.000). Format lewat `G.fmt`.
 

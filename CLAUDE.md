@@ -48,8 +48,12 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
   normal bidang datar. Satuan meter, 1 m = 25 unit game (`M2U` di `drive3d.js`).
   Kendaraan menghadap +Y Blender (−Z three.js), bangunan menghadap +X (ke jalan). Warna disimpan per sudut, tanpa tekstur.
   Warna penanda diganti di JS (`assetGeo`): (1,0,1) cat badan/dinding, (0,1,1) baju/genteng, (0.5,0,1) helm/kanopi/terpal.
-  Orang terdiri dari mesh `celana`, `baju`, `kulit`, `rambut` yang diwarnai per instance. `drive3d.js` memuatnya dengan
-  `vendor/GLTFLoader.js` (r128); kalau gagal, bentuk kotak lama dipakai. Kampung jauh di belakang tetap kotak sederhana.
+  Penanda yang digelapkan (g × penanda, g ≥ 0,5) diganti jadi g × warna pengganti, untuk kelim, manset, bibir helm.
+  Orang (±5.700 segitiga) dibentuk dari permukaan halus (`grid`, `loft`, `tube`, `head_pt` di `build_assets.py`): kemeja
+  berkerah dengan plaket, kancing, saku; celana dengan lipatan; sepatu bersol; tangan; kepala dengan rahang, hidung, mata,
+  alis, telinga, bibir; rambut bergaris dahi. Mesh `celana`, `baju`, `kulit`, `rambut` memakai warna per titik (abu = bayangan
+  lipatan, gelap = mata, sol) dikali warna per instance. Pengendara motor dibuat sama, duduk, dengan jaket ritsleting dan helm
+  terbuka berkaca. Kalau aset gagal dimuat, bentuk kotak lama dipakai. Kampung jauh di belakang tetap kotak sederhana.
   Isi jalan (penumpang, motor, angkot biru, lubang, polisi, mogok) dibuat `G.driveSpec` dari seed game, jadi tetap aturan main di `game.js`.
   Hasilnya dikirim balik ke `G.runShift(s, sh, 'setir', hasil)`, yang mengubahnya jadi uang, bensin, kondisi, denda, dan nama baik.
 - Simpan: `localStorage` kunci `narik-save-v1`, hanya di batas fase (pagi dan malam). Per browser, tidak lintas perangkat.
@@ -68,11 +72,15 @@ Suap ke oknum (`b3_oknum`): 50% +20 poin, 50% ketahuan −25 poin dan nama baik 
 ## Mini-game nyetir
 
 Dipilih per rit kalau pemain sendiri yang pegang angkot. Mode otomatis (ngebut, biasa, ngetem, istirahat) tetap ada.
-60 detik di kota Cibening. Kontroler: setir bulat di kiri, tombol klakson, pedal REM dan GAS di kanan. Tanpa gas angkot
-melambat sendiri (`COAST` 75/dtk²). Setir memakai bantuan lajur: ditahan = bergeser (makin cepat makin lincah), dilepas =
-meluncur ke tengah lajur terdekat searah belokan; sentuhan sesingkat apa pun pindah minimal satu lajur (`press`/`lane` di Sim).
-Angkot diam tidak bisa bergeser. Bot "jempol" (sentuh-lepas dengan reaksi 0,25 dtk) naik dari 11,5 ke 14 penumpang dan dari
-Rp 74 rb ke Rp 105 rb per rit dibanding setir tanpa bantuan. Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, H klakson, C kamera. Bot (`drivebot.js`) tetap
+60 detik di kota Cibening. Kontroler: setir bulat di kiri, tombol MUNDUR dan klakson di tengah, pedal REM dan GAS di kanan.
+Tanpa gas angkot melambat sendiri (`COAST` 75/dtk²). Gigi mundur (`inp.mundur`, tombol MUNDUR/MAJU atau R): gas mendorong
+ke belakang sampai `V_REV` 90; kalau angkot masih bergerak ke arah lain, gas mengerem dulu. Mundur menabrak kendaraan di
+belakang = serempet. Lampu mundur putih di 2D dan 3D. Setir memakai bantuan lajur: ditahan = bergeser, dilepas = meluncur ke
+tengah lajur terdekat searah belokan dan berhenti mulus; sentuhan sesingkat apa pun pindah minimal satu lajur (`press`/`lane` di Sim).
+Laju geser ikut laju angkot (`STEER_MIN` 26 + `STEER_K` 0,32 × v, maks 120) dan berubah bertahap (`STEER_R`): pindah satu lajur
+0,9 dtk di 53 km/j, 1,7 dtk di 11 km/j. Badan angkot menghadap arah gerak sebenarnya (`S.yaw`, maks `YAW_MAX` 0,2 rad).
+Angkot diam tidak bisa bergeser. Bot "jempol" (sentuh-lepas dengan reaksi 0,25 dtk) naik 14 penumpang, Rp 106 rb per rit.
+Kamera atas menoleh ke landmark yang sedang dilewati. Keyboard: ↑/W gas, ↓/S/spasi rem, ←→/A/D setir, R mundur/maju, H klakson, C kamera. Bot (`drivebot.js`) tetap
 memakai target lajur `inp.tx` dan gas penuh kecuali saat mengerem, jadi angka keseimbangan tidak berubah. Tiga kamera, diganti dengan tombol di bawah (atau tombol C), pilihan disimpan di
 `localStorage` kunci `narik-kamera`: 3D atas (bawaan), 3D belakang, dan peta 2D. Setir jari memakai posisi angkot di layar
 (`o.psx`, `o.ppu`), jadi sama untuk ketiganya. Fisika dijalankan dalam langkah ≤0,05 dtk per frame, jadi di HP lambat

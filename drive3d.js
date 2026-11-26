@@ -93,7 +93,11 @@ function assetGeo(name, part, cols) {
   const rep = Object.entries(cols || {}).map(([k, hex]) => [MARK[k], new root.THREE.Color(hex)]);
   const tmp = new root.THREE.Color();
   for (let i = 0; i < a.length; i += 3) {
-    for (const [m, col] of rep) if (Math.abs(a[i] - m[0]) < 0.02 && Math.abs(a[i + 1] - m[1]) < 0.02 && Math.abs(a[i + 2] - m[2]) < 0.02) { a[i] = col.r; a[i + 1] = col.g; a[i + 2] = col.b; break; }
+    // penanda boleh digelapkan (g × penanda, g ≥ 0,5) untuk kelim, manset, bibir helm: hasilnya g × warna pengganti
+    for (const [m, col] of rep) {
+      const g = (a[i] * m[0] + a[i + 1] * m[1] + a[i + 2] * m[2]) / (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]);
+      if (g >= 0.5 && Math.abs(a[i] - g * m[0]) < 0.02 && Math.abs(a[i + 1] - g * m[1]) < 0.02 && Math.abs(a[i + 2] - g * m[2]) < 0.02) { a[i] = col.r * g; a[i + 1] = col.g * g; a[i + 2] = col.b * g; break; }
+    }
     if (LIN) { tmp.setRGB(a[i], a[i + 1], a[i + 2]).convertSRGBToLinear(); a[i] = tmp.r; a[i + 1] = tmp.g; a[i + 2] = tmp.b; }
   }
   return (GEO[key] = g);
@@ -664,7 +668,7 @@ function createImpl(canvas, S, spec, o) {
   // orang: badan dan kepala (instanced, diperbarui tiap frame)
   const NP = 260;
   const PARTS = hasAsset('orang') ? ['celana', 'baju', 'kulit', 'rambut'].map(k => [k, assetGeo('orang', k)]) : [['baju', U.body], ['kulit', U.head]];
-  const pm = PARTS.map(([k, g]) => { const m = new T.InstancedMesh(g, mat({ vc: k === 'celana', obj: true }), NP); m.frustumCulled = false; m.castShadow = true; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m }; });
+  const pm = PARTS.map(([k, g]) => { const m = new T.InstancedMesh(g, mat({ vc: hasAsset('orang'), obj: true }), NP); m.frustumCulled = false; m.castShadow = true; dyn.add(m); for (let i = 0; i < NP; i++) m.setColorAt(i, C('#ffffff')); return { k, m }; });
   const dummy = new T.Object3D();
   // penanda penumpang dan kotak berhenti
   const markMat = mat({ color: '#ffd400' }); markMat.emissive = C('#806a00').clone(); mats.push(markMat);

@@ -479,6 +479,11 @@ def truk():
     A.export()
 
 
+def G2(g, base):
+    """Versi gelap warna polos (bukan warna penanda; penanda harus tepat supaya bisa diganti di JS)."""
+    return (base[0] * g, base[1] * g, base[2] * g, 1)
+
+
 def motor(name='motor', rider=True):
     A = Asset(name)
     A.add(BAYANG, plane((0, 0, 0.012), 0.5, 1.5))
@@ -494,17 +499,43 @@ def motor(name='motor', rider=True):
     A.add(KROM, cyl((0.14, -0.40, 0.36), 0.04, 0.42, 'y', 8))
     A.add(REMC, cube((0, -0.45, 0.68), (0.10, 0.03, 0.05)))
     if rider:
-        celana, kulit = hexc('2f3d4a'), hexc('a8714a')
+        # pengendara duduk: celana panjang, jaket (warna per motor), helm terbuka dengan kaca, wajah
+        celana, kulit, sepatu = hexc('2f3d4a'), hexc('a8714a'), hexc('2b2622')
         for sx in (-1, 1):
-            A.add(celana, cube((sx * 0.12, 0.02, 0.86), (0.13, 0.42, 0.14), rot=(-0.15, 0, 0)))
-            A.add(celana, cube((sx * 0.16, 0.20, 0.56), (0.11, 0.12, 0.42), rot=(0.25, 0, 0)))
-            A.add(BAN, cube((sx * 0.16, 0.28, 0.34), (0.11, 0.20, 0.08)))
-            A.add(KEDUA, cube((sx * 0.22, 0.20, 1.18), (0.09, 0.42, 0.09), rot=(-0.7, 0, 0)))
-            A.add(kulit, cube((sx * 0.25, 0.42, 1.00), (0.08, 0.08, 0.08)))
-        A.add(KEDUA, cube((0, -0.10, 1.20), (0.40, 0.24, 0.52), bevel=0.04, rot=(0.25, 0, 0)))
-        A.add(kulit, cyl((0, -0.02, 1.48), 0.05, 0.08, 'z', 6))
-        A.add(KETIGA, ball((0, 0.0, 1.60), 0.15, 2, (1, 1.1, 1)))
-        A.add(GELAP, cube((0, 0.13, 1.58), (0.18, 0.04, 0.09)))
+            A.add(celana, tube([(sx * 0.10, -0.16, 0.86), (sx * 0.14, 0.06, 0.87), (sx * 0.17, 0.25, 0.84)], [0.088, 0.078, 0.062], 12, 3), k='kain')
+            A.add(celana, tube([(sx * 0.17, 0.25, 0.84), (sx * 0.175, 0.29, 0.62), (sx * 0.175, 0.30, 0.43)], [0.062, 0.052, 0.046], 12, 3), k='kain')
+            A.add(sepatu, ball((sx * 0.175, 0.34, 0.39), 0.06, 1, (0.9, 1.9, 0.8)), k='karet')
+            A.add(KEDUA, tube([(sx * 0.18, -0.06, 1.33), (sx * 0.235, 0.14, 1.15), (sx * 0.25, 0.38, 1.0)], [0.062, 0.052, 0.046], 12, 3))
+            A.add(G2(0.7, KEDUA), tube([(sx * 0.25, 0.37, 1.0), (sx * 0.25, 0.40, 0.99)], [0.048, 0.048], 12, 1))     # manset
+            A.add(kulit, ball((sx * 0.25, 0.445, 0.985), 0.045, 1, (0.75, 1.0, 0.75)), k='polos')
+        JAK = [(0.84, 0, -0.18, 0.165, 0.115), (0.98, 0, -0.14, 0.158, 0.108), (1.12, 0, -0.10, 0.170, 0.112), (1.24, 0, -0.065, 0.182, 0.112),
+               (1.33, 0, -0.04, 0.17, 0.102), (1.40, 0, -0.025, 0.11, 0.08), (1.44, 0, -0.015, 0.07, 0.062)]
+        A.add(KEDUA, loft(JAK, 16, 2, 2.4))
+        for i in range(len(JAK) - 2):
+            a_, b_ = JAK[i], JAK[i + 1]
+            zc, yc = (a_[0] + b_[0]) / 2, (a_[2] + a_[4] + b_[2] + b_[4]) / 2
+            A.add(GELAP, cube((0, yc + 0.003, zc), (0.012, 0.006, b_[0] - a_[0] + 0.004), rot=(-math.atan2(b_[2] + b_[4] - a_[2] - a_[4], b_[0] - a_[0]), 0, 0)), k='logam')   # ritsleting
+        A.add(G2(0.75, KEDUA), loft([(1.40, 0, -0.03, 0.085, 0.072), (1.47, 0, -0.025, 0.08, 0.07)], 16, 1, 2, False, False))  # kerah jaket
+        HC = Vector((0, 0.0, 1.575))
+        A.add(kulit, loft([(1.40, 0, -0.02, 0.046, 0.044), (1.50, 0, -0.005, 0.046, 0.044)], 10, 1), k='polos')
+        A.add(kulit, grid(lambda u, v: head_pt(u * math.tau, -math.pi / 2 + 0.06 + v * (math.pi - 0.12), 0, HC), 16, 10), k='polos')
+        for sx in (-1, 1):
+            e = head_pt(sx * 0.36, 0.04, -0.004, HC)
+            A.add(hexc('120e0c'), ball((e.x, e.y + 0.004, e.z), 0.009, 1, (1, 0.6, 1)), k='polos')
+        n_ = head_pt(0, -0.08, 0.004, HC)
+        A.add(kulit, ball((0, n_.y + 0.004, n_.z), 0.017, 1, (0.85, 1.1, 1.2)), k='polos')
+        # helm: tempurung tebal, terbuka di muka, kaca gelap melengkung, tali dagu
+        def helm(u, v):
+            th = u * math.tau
+            ph0 = math.radians(-16.25 + 27.5 * math.cos(th) + 8.75 * math.cos(2 * th))
+            ph = ph0 + (math.radians(87) - ph0) * v
+            return head_pt(th, ph, 0.034, HC) + Vector((0, -0.004, 0.012 * v))
+        A.add(KETIGA, grid(helm, 20, 8, False, True))
+        A.add(G2(0.55, KETIGA), grid(lambda u, v: head_pt(u * math.tau, math.radians(-16.25 + 27.5 * math.cos(u * math.tau) + 8.75 * math.cos(2 * u * math.tau)) + v * 0.08, 0.036, HC), 20, 1, False, False))  # bibir helm
+        A.add(KACA, grid(lambda u, v: head_pt(-0.95 + u * 1.9, math.radians(24) - v * math.radians(36), 0.05, HC), 10, 3, False, False, closed=False, out=tuple(HC)))
+        for sx in (-1, 1):
+            a_ = head_pt(sx * 1.05, -0.25, 0.012, HC)
+            A.add(GELAP, cube((a_.x, a_.y, a_.z - 0.03), (0.006, 0.012, 0.09), rot=(0.25, 0, 0)), k='kain')
     A.export()
 
 
@@ -536,23 +567,179 @@ def kereta():
 
 
 # ---------- orang (depan +Y): empat mesh diwarnai per orang di JS ----------
+def grid(pt, nu, nv, cap0=True, cap1=True, closed=True, out=None):
+    """Permukaan dari cincin-cincin: pt(u, v) -> titik, u melingkar (tertutup), v sepanjang badan.
+    Dipakai untuk badan, kaki, lengan, kepala, rambut: bentuk organik, dihaluskan.
+    closed=False: lembaran terbuka (u 0..1 termasuk ujung); out = titik pusat, sisi depan menghadap menjauhinya."""
+    def fn(b):
+        mu = nu if closed else nu + 1
+        rows = [[b.verts.new(pt(i / nu, j / nv)) for i in range(mu)] for j in range(nv + 1)]
+        cen = [sum((v.co for v in r), Vector()) / mu for r in rows] if out is None else [Vector(out)] * (nv + 1)
+        if not closed:
+            for j in range(nv):
+                for i in range(nu):
+                    f = b.faces.new([rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]])
+                    f.normal_update()
+                    if f.normal.dot(f.calc_center_median() - cen[j]) < 0:
+                        f.normal_flip()
+            return
+        def orient(f, out):
+            f.normal_update()
+            if f.normal.dot(out) < 0:
+                f.normal_flip()
+        for j in range(nv):
+            for i in range(nu):
+                k = (i + 1) % nu
+                f = b.faces.new([rows[j][i], rows[j][k], rows[j + 1][k], rows[j + 1][i]])
+                orient(f, f.calc_center_median() - (cen[j] + cen[j + 1]) / 2)
+        if cap0:
+            orient(b.faces.new(rows[0]), cen[0] - cen[1])
+        if cap1:
+            orient(b.faces.new(rows[-1]), cen[-1] - cen[-2])
+    fn.halus = 'semua'
+    return fn
+
+
+def lerp_secs(secs, v):
+    """Interpolasi halus daftar penampang (z, cx, cy, rx, ry) pada v 0..1."""
+    f = v * (len(secs) - 1)
+    i = min(int(f), len(secs) - 2)
+    t = f - i
+    t = t * t * (3 - 2 * t)
+    return [a + (b - a) * t for a, b in zip(secs[i], secs[i + 1])]
+
+
+def loft(secs, nu=16, sub=2, power=2.0, cap0=True, cap1=True):
+    """Tabung lewat penampang elips (z, cx, cy, rx, ry), dari bawah ke atas. power > 2 = penampang lebih kotak."""
+    nv = (len(secs) - 1) * sub
+    def pt(u, v):
+        z, cx, cy, rx, ry = lerp_secs(secs, v)
+        a = u * math.tau
+        c, s_ = math.cos(a), math.sin(a)
+        k = 2 / power
+        return Vector((cx + rx * math.copysign(abs(c) ** k, c), cy + ry * math.copysign(abs(s_) ** k, s_), z))
+    return grid(pt, nu, nv, cap0, cap1)
+
+
+HEAD = Vector((0, 0.0, 1.555))
+HR = (0.083, 0.098, 0.116)
+
+
+def tube(pts, radii, nu=12, sub=3, cap0=True, cap1=True):
+    """Tabung melengkung lewat titik-titik (lutut, siku menekuk), penampang bulat tegak lurus arah tabung."""
+    P = [Vector(p) for p in pts]
+    def at(v):
+        f = v * (len(P) - 1)
+        i = min(int(f), len(P) - 2)
+        t = f - i
+        # kurva halus Catmull-Rom
+        p0, p1, p2, p3 = P[max(0, i - 1)], P[i], P[i + 1], P[min(len(P) - 1, i + 2)]
+        c = 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3)
+        r = radii[i] + (radii[i + 1] - radii[i]) * t
+        return c, r
+    def pt(u, v):
+        c, r = at(v)
+        c2, _ = at(min(1, v + 0.01)) if v < 0.99 else (c, 0)
+        c1, _ = at(max(0, v - 0.01)) if v >= 0.99 else (c, 0)
+        tng = (c2 - c1).normalized()
+        ref = Vector((1, 0, 0)) if abs(tng.x) < 0.8 else Vector((0, 0, 1))
+        sd = tng.cross(ref).normalized()
+        up = sd.cross(tng).normalized()
+        a = u * math.tau
+        return c + (sd * math.cos(a) + up * math.sin(a)) * r
+    return grid(pt, nu, (len(P) - 1) * sub, cap0, cap1)
+
+
+def head_pt(th, ph, grow=0.0, c=None):
+    """Titik di permukaan kepala. th = sudut keliling (0 = depan +Y), ph = lintang (-pi/2 dagu .. pi/2 ubun-ubun)."""
+    rx, ry, rz = HR[0] + grow, HR[1] + grow, HR[2] + grow
+    x, y, z = math.sin(th) * math.cos(ph) * rx, math.cos(th) * math.cos(ph) * ry, math.sin(ph) * rz
+    s = max(0.0, -math.sin(ph))
+    x *= 1 - 0.24 * s                                        # rahang menyempit ke dagu
+    if y > 0:
+        y *= 1 - 0.12 * s * s                                # dagu
+    else:
+        y *= 1.06 if ph > -0.35 else 1.0                     # kepala belakang
+    return (c or HEAD) + Vector((x, y, z))
+
+
 def orang():
     A = Asset('orang', 'orang')
-    sepatu = hexc('2a2a2a')
+    G = lambda g: (g, g, g, 1)                               # abu: dikali warna pakaian per orang di JS
+    sepatu, sol, mata, bibir = hexc('2b2622'), hexc('171513'), hexc('120e0c'), hexc('8e5a52')
+    # kaki dan celana panjang
     for sx in (-1, 1):
-        A.add(PUTIH, cyl((sx * 0.09, 0, 0.46), 0.072, 0.78, 'z', 8, r2=0.085), 'celana')
-        A.add(PUTIH, ball((sx * 0.09, 0, 0.85), 0.09, 1), 'celana')
-        A.add(sepatu, cube((sx * 0.09, 0.04, 0.045), (0.11, 0.25, 0.09), bevel=0.035), 'celana', k='karet')
-        A.add(PUTIH, cyl((sx * 0.25, 0, 1.16), 0.055, 0.32, 'z', 6, r2=0.06, rot=(0, sx * 0.1, 0)), 'baju')
-        A.add(PUTIH, cyl((sx * 0.27, 0, 0.88), 0.045, 0.28, 'z', 6, rot=(0, sx * 0.08, 0)), 'kulit')
-        A.add(PUTIH, ball((sx * 0.28, 0, 0.72), 0.05, 1, (1, 0.8, 1.2)), 'kulit')
-        A.add(PUTIH, ball((sx * 0.22, 0, 1.32), 0.08, 1), 'baju')
-    A.add(PUTIH, cube((0, 0, 0.92), (0.34, 0.2, 0.16), bevel=0.06), 'celana')
-    A.add(PUTIH, cube((0, 0, 1.15), (0.38, 0.21, 0.48), bevel=0.08), 'baju')
-    A.add(PUTIH, cyl((0, 0, 1.42), 0.055, 0.1, 'z', 6), 'kulit')
-    A.add(PUTIH, ball((0, 0.01, 1.55), 0.112, 2, (0.92, 1.0, 1.12)), 'kulit')
-    A.add(PUTIH, ball((0, 0.0, 1.535), 0.025, 1), 'kulit')
-    A.add(PUTIH, ball((0, -0.02, 1.59), 0.122, 2, (0.98, 1.0, 0.86)), 'rambut')
+        A.add(PUTIH, loft([(0.085, sx * 0.093, 0.005, 0.052, 0.055), (0.15, sx * 0.093, 0.0, 0.047, 0.051), (0.30, sx * 0.092, -0.002, 0.054, 0.058),
+                           (0.47, sx * 0.091, 0.004, 0.058, 0.063), (0.56, sx * 0.090, 0.0, 0.064, 0.069), (0.72, sx * 0.088, -0.004, 0.079, 0.084),
+                           (0.86, sx * 0.084, -0.006, 0.090, 0.094)], 16, 2), 'celana')
+        A.add(G(0.82), loft([(0.082, sx * 0.093, 0.005, 0.054, 0.057), (0.10, sx * 0.093, 0.004, 0.054, 0.057)], 16, 1), 'celana')    # lipatan ujung celana
+        A.add(PUTIH, cyl((sx * 0.093, 0.0, 0.085), 0.037, 0.07, 'z', 6), 'kulit')                                                   # pergelangan kaki
+        # sepatu: badan membulat, sol, tali
+        A.add(sepatu, ball((sx * 0.093, 0.04, 0.05), 0.06, 1, (0.9, 2.0, 0.8)), 'celana', k='karet')
+        A.add(sol, cube((sx * 0.093, 0.04, 0.012), (0.098, 0.235, 0.024), bevel=0.01), 'celana', k='karet')
+        for k in range(3):
+            A.add(hexc('d8d2c6'), cube((sx * 0.093, 0.075 + k * 0.03, 0.093 - k * 0.006), (0.05, 0.008, 0.006), rot=(-0.35, 0, 0)), 'celana', k='kain')
+    # pinggul (celana)
+    A.add(PUTIH, loft([(0.80, 0, -0.004, 0.150, 0.098), (0.86, 0, -0.004, 0.160, 0.104), (0.93, 0, -0.002, 0.150, 0.096)], 18, 2, 2.4), 'celana')
+    # badan berkemeja: pinggang ramping, dada, bahu turun ke leher
+    TOR = [(0.835, 0, -0.002, 0.176, 0.116), (0.95, 0, 0.0, 0.166, 0.108), (1.04, 0, 0.002, 0.158, 0.103), (1.13, 0, 0.004, 0.166, 0.109),
+           (1.23, 0, 0.006, 0.178, 0.116), (1.31, 0, 0.002, 0.186, 0.113), (1.36, 0, -0.004, 0.178, 0.104), (1.405, 0, -0.006, 0.13, 0.086),
+           (1.44, 0, -0.006, 0.070, 0.062)]
+    A.add(PUTIH, loft(TOR, 18, 2, 2.4, cap0=True, cap1=True), 'baju')
+    A.add(G(0.84), loft([(0.832, 0, -0.002, 0.178, 0.118), (0.852, 0, -0.002, 0.178, 0.118)], 18, 1, 2.4), 'baju')       # kelim bawah
+    def fy(z):  # permukaan depan badan pada tinggi z (cari penampang terdekat)
+        best = min(range(len(TOR) - 1), key=lambda i: abs((TOR[i][0] + TOR[i + 1][0]) / 2 - z))
+        a, b_ = TOR[best], TOR[best + 1]
+        t = max(0, min(1, (z - a[0]) / (b_[0] - a[0])))
+        return a[2] + a[4] + (b_[2] + b_[4] - a[2] - a[4]) * t
+    # plaket kancing, kancing, saku dada, kerah
+    for i in range(7):
+        z0, z1 = 0.845 + i * 0.075, 0.845 + (i + 1) * 0.075
+        zc = (z0 + z1) / 2
+        A.add(G(0.86), cube((0, fy(zc) + 0.001, zc), (0.03, 0.006, z1 - z0 + 0.002)), 'baju')
+        if i < 6:
+            A.add(G(0.62), cyl((0, fy(z1) + 0.004, z1), 0.0075, 0.006, 'y', 6), 'baju')
+    A.add(G(0.9), cube((0.085, fy(1.24) + 0.002, 1.235), (0.075, 0.006, 0.085), bevel=0.004), 'baju')
+    A.add(G(0.78), cube((0.085, fy(1.275) + 0.005, 1.272), (0.077, 0.006, 0.016), bevel=0.003), 'baju')
+    A.add(G(0.93), loft([(1.405, 0, -0.008, 0.078, 0.07), (1.445, 0, -0.01, 0.072, 0.066), (1.47, 0, -0.012, 0.074, 0.068)], 16, 1, 2, False, False), 'baju')
+    for sx in (-1, 1):
+        A.add(G(0.95), cube((sx * 0.036, fy(1.395) + 0.004, 1.40), (0.052, 0.007, 0.05), rot=(-0.3, 0, sx * 0.55), bevel=0.003), 'baju')
+    # leher
+    A.add(PUTIH, loft([(1.38, 0, -0.006, 0.048, 0.046), (1.47, 0, -0.004, 0.046, 0.044), (1.50, 0, 0.0, 0.05, 0.05)], 12, 1), 'kulit')
+    # lengan: lengan baju pendek, lengan bawah, tangan
+    for sx in (-1, 1):
+        A.add(PUTIH, loft([(1.13, sx * 0.242, 0.004, 0.062, 0.064), (1.24, sx * 0.226, 0.002, 0.064, 0.064), (1.32, sx * 0.205, -0.002, 0.062, 0.062),
+                           (1.37, sx * 0.17, -0.004, 0.05, 0.055)], 14, 2, 2, False, True), 'baju')
+        A.add(G(0.84), loft([(1.12, sx * 0.243, 0.004, 0.064, 0.066), (1.14, sx * 0.242, 0.004, 0.064, 0.066)], 14, 1, 2, False, False), 'baju')
+        A.add(PUTIH, loft([(0.80, sx * 0.268, 0.032, 0.026, 0.03), (0.86, sx * 0.264, 0.026, 0.032, 0.036), (0.97, sx * 0.256, 0.016, 0.040, 0.044),
+                           (1.07, sx * 0.248, 0.008, 0.044, 0.047), (1.20, sx * 0.236, 0.004, 0.05, 0.052)], 12, 2), 'kulit')
+        A.add(PUTIH, ball((sx * 0.272, 0.036, 0.745), 0.05, 1, (0.62, 0.48, 1.1)), 'kulit')            # telapak dan jari
+        A.add(PUTIH, ball((sx * 0.258, 0.062, 0.77), 0.022, 1, (0.8, 0.8, 1.4)), 'kulit')              # jempol
+    # kepala: rahang, dagu, telinga, hidung, mata, alis, bibir
+    def head(u, v):
+        return head_pt(u * math.tau, -math.pi / 2 + 0.06 + v * (math.pi - 0.12))
+    A.add(PUTIH, grid(head, 20, 12), 'kulit')
+    for sx in (-1, 1):
+        e = head_pt(sx * 0.36, 0.06, -0.006)
+        A.add(G(0.97), ball((e.x, e.y, e.z), 0.0135, 1, (1, 0.6, 0.8)), 'kulit')                       # bola mata (warna kulit muda)
+        A.add(mata, ball((e.x * 1.02, e.y + 0.006, e.z), 0.0085, 1, (1, 0.6, 1)), 'kulit')
+        b_ = head_pt(sx * 0.36, 0.22, 0.002)
+        A.add(PUTIH, cube((b_.x, b_.y, b_.z), (0.034, 0.008, 0.009), rot=(0, sx * -0.12, sx * 0.3), bevel=0.003), 'rambut')
+        t_ = head_pt(sx * math.pi / 2, -0.02)
+        A.add(PUTIH, ball((t_.x + sx * 0.008, t_.y - 0.008, t_.z), 0.03, 1, (0.45, 0.62, 1.15)), 'kulit')
+    n_ = head_pt(0, -0.06, 0.004)
+    A.add(PUTIH, ball((0, n_.y + 0.004, n_.z), 0.018, 1, (0.85, 1.1, 1.25)), 'kulit')
+    A.add(G(0.8), ball((0, n_.y + 0.002, n_.z - 0.016), 0.012, 1, (1.5, 0.8, 0.6)), 'kulit')
+    m_ = head_pt(0, -0.36, -0.002)
+    A.add(bibir, ball((0, m_.y, m_.z), 0.02, 1, (1.25, 0.35, 0.32)), 'kulit')
+    # rambut: tempurung dengan garis rambut di dahi, menutup belakang kepala sampai tengkuk
+    def hair(u, v):
+        th = u * math.tau
+        ph0 = math.radians(40 * math.cos(th) - 5 * math.cos(2 * th))
+        ph = ph0 + (math.radians(86) - ph0) * v
+        p = head_pt(th, ph, 0.011 + 0.004 * v)
+        return p + Vector((0, -0.006 * v, 0.006 * v))
+    A.add(PUTIH, grid(hair, 20, 7, False, True), 'rambut')
     A.export()
 
 

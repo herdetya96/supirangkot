@@ -1,12 +1,12 @@
 {
   "name": "narik",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Narik — game manajemen angkot dengan cerita (prototipe Bab 1–3)",
   "scripts": {
     "sim": "node sim.js",
     "drive": "node drivebot.js",
-    "assets": "python3 tools/blender/build_assets.py assets/models && node tools/pack_models.js && python3 tools/blender/render_sprites.py assets/img",
+    "assets": "python3 tools/blender/build_textures.py assets/img && python3 tools/blender/build_assets.py assets/models && node tools/pack_models.js && python3 tools/blender/render_sprites.py assets/img",
     "serve": "python3 -m http.server 5173"
   }
 }

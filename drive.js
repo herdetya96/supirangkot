@@ -737,7 +737,7 @@ function mount(host, spec, opts, done) {
         <li>Awas motor, mobil, lubang, dan polisi. Angkot biru suka menyerobot penumpang.</li></ul>
         ${spec.wet ? '<p><b>Hujan:</b> rem licin, penumpang lebih banyak.</p>' : ''}${spec.wobble ? '<p><b>Kamu ngantuk:</b> setir agak goyang.</p>' : ''}${spec.sh === 2 ? '<p><b>Sore:</b> makin lama makin gelap.</p>' : ''}
         <p>Tarif ±Rp ${spec.tarif} rb per penumpang.</p>
-        <button class="gas" data-ny="go">Gas!</button><button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
+        <button class="gas" data-ny="go">Gas!</button>${R3 ? `<button class="btn-teks" data-ny="grafis">Grafis: <b>${R3.quality() === 'tinggi' ? 'Tinggi' : 'Ringan'}</b> (ketuk untuk ganti)</button>` : ''}<button class="btn-teks" data-ny="auto">Narik otomatis saja</button></div></div>
     </div>
     <div class="ny-kontrol">
       <div class="setir" data-ny="setir" role="slider" aria-label="Setir" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
@@ -766,7 +766,7 @@ function mount(host, spec, opts, done) {
   }
   function frame(now) {
     // HP lambat: fisika tetap memakai langkah kecil supaya waktu rit sama dengan waktu nyata
-    const dt = Math.min(0.25, (now - last) / 1000 || 0); last = now;
+    const dt = Math.min(0.5, (now - last) / 1000 || 0); last = now;
     inp.steer = keys.l || keys.r ? (keys.r ? 1 : 0) - (keys.l ? 1 : 0) : wheel;
     inp.brake = !!(keys.b || remDown); inp.gas = keys.g || gasDown ? 1 : 0;
     wheelEl.style.transform = `rotate(${inp.steer * 110}deg)`;
@@ -838,6 +838,13 @@ function mount(host, spec, opts, done) {
     if (a === 'auto') close(null);
     if (a === 'done') close(S.result());
     if (a === 'kam') cycle();
+    if (a === 'grafis' && R3 && !running) {
+      // ganti mode grafis: bangun ulang tampilan 3D dengan material dan bayangan yang sesuai
+      const q = R3.quality() === 'tinggi' ? 'ringan' : 'tinggi'; R3.setQuality(q); b.querySelector('b').textContent = q === 'tinggi' ? 'Tinggi' : 'Ringan';
+      if (r3) r3.detach();
+      try { r3 = R3.create(box, S, spec, o); } catch (e) { r3 = null; }
+      size();
+    }
   });
   size(); raf = requestAnimationFrame(t => { last = t; frame(t); });
   goBtn.focus();

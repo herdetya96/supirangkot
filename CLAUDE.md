@@ -8,12 +8,13 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 - `npm run serve` lalu buka `http://localhost:5173`
 - `npm run sim` menjalankan `sim.js` (300 permainan per strategi). Jalankan setiap kali angka ekonomi diubah.
 - `npm run drive` menjalankan `drivebot.js`: dua bot sopir memainkan mini-game nyetir 200 kali. Jalankan setiap kali `drive.js` atau `G.DRIVE` diubah.
-- `npm run assets` membuat ulang model 3D di `assets/models/*.glb` dari `tools/blender/build_assets.py`, membungkusnya jadi
-  `assets/models.js`, lalu merender gambar angkot menu `assets/img/angkot-<warna>.webp` dengan Cycles (`tools/blender/render_sprites.py`).
+- `npm run assets` membuat ulang tekstur material `assets/img/detail.webp` (`tools/blender/build_textures.py`), model 3D
+  `assets/models/*.glb` (`tools/blender/build_assets.py`), membungkus model jadi `assets/models.js` (`tools/pack_models.js`),
+  lalu merender gambar angkot menu `assets/img/angkot-<warna>.webp` dengan Cycles (`tools/blender/render_sprites.py`).
   Butuh Blender sebagai modul Python (`pip install bpy`, Blender 4.2+; dibuat dengan bpy 5.3.0, Python 3.13).
-  Hasil `.glb` ikut di-commit, jadi game tidak butuh Blender untuk jalan. Setelah itu `tools/pack_models.js` membungkus semua
-  `.glb` jadi `assets/models.js` (base64, ±1,3 MB) karena halaman artifact tidak menyajikan `.glb`; `drive3d.js` memuat
-  bundel itu saat 3D pertama dipakai, dan baru mencoba file `.glb` satu per satu kalau bundelnya tidak ada.
+  Hasil `.glb` dan bundel ikut di-commit, jadi game tidak butuh Blender untuk jalan. `tools/pack_models.js` mengubah `.glb`
+  jadi format ringkas sendiri (posisi uint16 terkuantisasi, normal int8, warna+jenis material uint8×4, ±13 byte per titik)
+  di `assets/models.js` (±2,8 MB, ±0,7 MB terkompresi). `drive3d.js` memuatnya saat 3D pertama dipakai; GLTFLoader tidak dipakai.
 
 ## Arsitektur
 
@@ -24,6 +25,15 @@ Status: prototipe Bab 1–3 bisa dimainkan dari awal sampai "bersambung".
 - `drive.js` = mini-game nyetir (`window.NARIK_DRIVE`). `Sim` adalah fisika murni tanpa DOM, `mount` memasang canvas dan kontrol ke `#ny`.
   Juga berisi peta 2D (`draw`) dan HUD bersama (`drawHUD`, menerima `proj(d, x)` → titik layar).
 - `drive3d.js` = tampilan 3D (`window.NARIK_3D`) memakai three.js r128 di `vendor/three.min.js` (MIT, `vendor/THREE-LICENSE`).
+  Dua mode grafis (`localStorage` kunci `narik-grafis`, tombol di kartu pembuka rit):
+  - **Tinggi** (bawaan, butuh WebGL2): `MeshStandardMaterial` PBR, warna linear + tone mapping ACES, peta pantulan langit
+    (PMREM), bayangan matahari 2048² yang ikut kamera. Shader disisipi (`inject`): tiap titik membawa jenis material
+    (atribut `cls`, 16 jenis, lihat `KELAS`/`DETAIL`), lalu fragmen mengambil tekstur detail Blender secara triplanar
+    (ruang dunia untuk benda diam, ruang benda untuk kendaraan dan orang), memberi relief (bump dari turunan layar),
+    kekasaran, dan logam per jenis. Tekstur detail = `assets/img/detail.webp` (atlas 4×4 lapisan 512 px) dimuat jadi
+    `DataTexture2DArray` satu kanal.
+  - **Ringan**: Lambert tanpa bayangan dan tanpa tekstur, seperti sebelumnya.
+  Instance bangunan, pohon, tiang dipecah per blok 1400 unit (`chunked`); blok lebih jauh dari 3600 unit disembunyikan.
   Hanya menggambar: dunia statis per trayek dibangun sekali (`buildStatic`, jalan sebagai pita berwarna per titik, bangunan dan pohon
   lewat `InstancedMesh`), lalu tiap frame memindahkan kendaraan, orang, lampu, kamera. Satu `WebGLRenderer` dipakai ulang antar rit.
   Kalau three.js atau WebGL tidak ada, `mount` otomatis memakai peta 2D.
@@ -150,8 +160,8 @@ Catatan: angka ini dari bot, bukan manusia. Retensi belum pernah diuji ke pemain
   (render asli prototipe) tidak dipakai lagi tapi disimpan.
 - Belum ada tes unit; `sim.js` dan `drivebot.js` satu-satunya jaring pengaman.
 - Mini-game nyetir belum punya suara, getar, atau tutorial bertahap; penjelasannya hanya kartu sebelum rit.
-- Tampilan 3D belum pernah diukur di HP sungguhan. Di Chromium headless (WebGL perangkat lunak) sekitar 6 fps dengan aset
-  Blender; aset dimuat ±1 dtk lewat jaringan lokal (±1 MB). Belum ada pilihan kualitas grafis.
+- Tampilan 3D belum pernah diukur di HP sungguhan. Di Chromium headless (WebGL perangkat lunak): mode Tinggi ±3 fps,
+  Ringan ±8 fps. Fisika memakai langkah ≤0,05 dtk dengan batas 0,5 dtk per frame; di bawah 2 fps waktu rit melambat.
 - Masih bentuk JS sederhana: aspal, marka, sungai, jembatan, rambu, kampung jauh kalau aset gagal dimuat.
 - Kontroler belum diuji dengan jari di HP sungguhan; ukuran setir dan pedal mungkin perlu disesuaikan.
 

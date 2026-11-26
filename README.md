@@ -23,12 +23,14 @@ Tidak ada build step. Satu-satunya pustaka, three.js r128 untuk tampilan 3D, dis
 | `ui.js` | Tampilan dan interaksi. Tidak menyimpan aturan main |
 | `drive.js` | Mini-game nyetir: fisika jalan, peta 2D, HUD |
 | `drive3d.js` | Tampilan 3D mini-game nyetir (three.js) |
-| `vendor/three.min.js`, `vendor/GLTFLoader.js` | three.js r128 dan pemuat glTF-nya (lisensi MIT di `vendor/THREE-LICENSE`) |
+| `vendor/three.min.js` | three.js r128 (lisensi MIT di `vendor/THREE-LICENSE`) |
 | `tools/blender/build_assets.py` | Skrip Blender yang memodelkan semua aset 3D (33 model) |
 | `tools/blender/render_sprites.py` | Render Cycles gambar angkot menu per warna |
+| `tools/blender/build_textures.py` | Tekstur material prosedural Blender → `assets/img/detail.webp` |
+| `tools/pack_models.js` | Bungkus `.glb` jadi format ringkas `assets/models.js` |
 | `assets/img/angkot-*.webp` | Gambar angkot menu hasil render Blender |
 | `assets/models/*.glb` | Hasil ekspor skrip Blender: kendaraan, orang, bangunan, perabot jalan |
-| `assets/models.js` | Semua `.glb` dibungkus base64 (dibuat `tools/pack_models.js`) |
+| `assets/models.js` | Semua model dalam format ringkas (dibuat `tools/pack_models.js`) |
 | `drivebot.js` | Bot sopir untuk menyeimbangkan mini-game nyetir |
 | `sim.js` | Bot yang memainkan ratusan permainan untuk menguji keseimbangan |
 | `angkot.webp` | Render angkot asli prototipe (tidak dipakai lagi) |
